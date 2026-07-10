@@ -365,6 +365,81 @@ def api_scanner_assign(subdomain):
     ok, msg = scanner.assign_ip(subdomain, ip_info)
     return jsonify({"ok": ok, "message": msg})
 
+# ─── Telegram Bot API ──────────────────────────────────────
+
+@app.route("/api/bot/status")
+def api_bot_status():
+    from core.telegram_bot import HajiTelegramBot
+    bot = HajiTelegramBot()
+    return jsonify({"ok": True, "status": bot.get_status()})
+
+@app.route("/api/bot/setup", methods=["POST"])
+def api_bot_setup():
+    from core.telegram_bot import HajiTelegramBot
+    bot = HajiTelegramBot()
+    data = request.json or {}
+    ok, msg = bot.setup(data.get("token", ""), data.get("owner_id", ""), data.get("domain", ""))
+    return jsonify({"ok": ok, "message": msg})
+
+@app.route("/api/bot/webhook", methods=["POST"])
+def api_bot_set_webhook():
+    from core.telegram_bot import HajiTelegramBot
+    bot = HajiTelegramBot()
+    data = request.json or {}
+    ok, msg = bot.set_webhook(data.get("domain", ""))
+    return jsonify({"ok": ok, "message": msg})
+
+@app.route("/api/bot/admin", methods=["POST"])
+def api_bot_admin():
+    from core.telegram_bot import HajiTelegramBot
+    bot = HajiTelegramBot()
+    data = request.json or {}
+    action = data.get("action", "")
+    if action == "add":
+        ok, msg = bot.add_admin(data.get("admin_id"), data.get("name", ""))
+    elif action == "remove":
+        ok, msg = bot.remove_admin(data.get("admin_id"))
+    else:
+        return jsonify({"ok": False, "error": "action نامعتبر"})
+    return jsonify({"ok": ok, "message": msg})
+
+@app.route("/api/bot/products", methods=["POST"])
+def api_bot_products():
+    from core.telegram_bot import HajiTelegramBot
+    bot = HajiTelegramBot()
+    data = request.json or {}
+    bot.update_products(data.get("products", []))
+    return jsonify({"ok": True, "message": "محصولات ذخیره شد"})
+
+@app.route("/api/bot/settings", methods=["POST"])
+def api_bot_settings():
+    from core.telegram_bot import HajiTelegramBot
+    bot = HajiTelegramBot()
+    data = request.json or {}
+    cfg = bot._load_config()
+    for key in ["card_number", "card_holder", "support_username", "channel_id", "force_join", "trial_enabled", "trial_volume_gb", "trial_duration_hours", "referral_enabled", "referral_percent", "welcome_text"]:
+        if key in data:
+            cfg[key] = data[key]
+    bot._save_config(cfg)
+    return jsonify({"ok": True, "message": "تنظیمات ربات ذخیره شد"})
+
+@app.route("/api/bot/broadcast", methods=["POST"])
+def api_bot_broadcast():
+    from core.telegram_bot import HajiTelegramBot
+    bot = HajiTelegramBot()
+    data = request.json or {}
+    count = bot.broadcast(data.get("text", ""), data.get("target", "all"))
+    return jsonify({"ok": True, "message": f"پیام به {count} کاربر ارسال شد"})
+
+@app.route("/bot/webhook", methods=["POST"])
+def bot_webhook():
+    """وب‌هوک تلگرام"""
+    from core.telegram_bot import HajiTelegramBot
+    bot = HajiTelegramBot()
+    update = request.json or {}
+    result = bot.handle_update(update)
+    return jsonify(result)
+
 # ─── Subdomain Panel (Graphical) ─────────────────────────
 
 @app.route("/subdomain-panel")

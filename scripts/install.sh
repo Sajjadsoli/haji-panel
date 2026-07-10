@@ -341,6 +341,10 @@ install_panel() {
         rm -rf /tmp/haji-panel-clone
     fi
     
+    # Install CLI script
+    cp scripts/haji-cli.sh /usr/bin/haji
+    chmod +x /usr/bin/haji
+    
     # Python venv
     cd "$INSTALL_DIR/panel"
     python3 -m venv venv
@@ -551,6 +555,8 @@ show_summary() {
     echo -e "  📁 مسیر نصب:  /opt/haji-panel"
     echo -e "  🔧 سرویس:     systemctl {start|stop|restart} haji-panel"
     echo -e "  💎 اسکنر IP:   هر ۶ ساعت خودکار اسکن می‌کند"
+    echo -e "  🤖 ربات تلگرام: از پنل ادمین فعال کنید"
+    echo -e "  🖥️ CLI:        haji (منوی مدیریت)"
     echo ""
     echo -e "${BOLD}🛡️ وضعیت ضد‌فیلتر:${NC}"
     echo -e "  Cloudflare Warp:  $(warp-cli status 2>/dev/null | grep -q Connected && echo -e "${GREEN}فعال${NC}" || echo -e "${YELLOW}در حال بررسی${NC}")"

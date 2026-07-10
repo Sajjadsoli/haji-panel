@@ -205,8 +205,139 @@
         </div>
     </form>
 
-    <!-- Diamond IPs -->
+    # Diamond IPs
     <div id="diamondList" style="margin-top: 16px;"></div>
+</div>
+
+<!-- Telegram Bot Section -->
+<div class="section">
+    <h2 class="section-title">🤖 ربات تلگرامی فروش VPN</h2>
+    <div class="guide-card">
+        <p>ربات تلگرامی برای فروش خودکار VPN. کاربر با دادن توکن ربات و آیدی عددی مالک، ربات را فعال می‌کند.</p>
+        <p>پس از تنظیم، وب‌هوک خودکار ست می‌شود و ربات آماده استفاده است.</p>
+    </div>
+
+    <!-- Bot Status -->
+    <div class="info-table" style="margin-bottom: 16px;">
+        <div class="info-row">
+            <span class="info-label">وضعیت ربات</span>
+            <span class="info-value" id="botEnabled">—</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">یوزرنیم ربات</span>
+            <span class="info-value" id="botUsername">—</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">وب‌هوک</span>
+            <span class="info-value" id="botWebhook">—</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">کل کاربران</span>
+            <span class="info-value" id="botUsers">—</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">پرداخت‌های در انتظار</span>
+            <span class="info-value" id="botPending">—</span>
+        </div>
+    </div>
+
+    <!-- Bot Setup -->
+    <form class="form-card" id="botSetupForm">
+        <div class="form-row">
+            <div class="form-group" style="flex: 2;">
+                <label>🤖 توکن ربات (از @BotFather)</label>
+                <input type="text" id="botToken" placeholder="123456:ABC-DEF...">
+            </div>
+            <div class="form-group">
+                <label>🆔 آیدی عددی مالک</label>
+                <input type="number" id="botOwnerId" placeholder="123456789">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>🌐 دامنه (برای وب‌هوک خودکار)</label>
+            <input type="text" id="botDomain" placeholder="example.com">
+        </div>
+        <button type="submit" class="btn-primary">🚀 فعال‌سازی ربات + ست خودکار وب‌هوک</button>
+    </form>
+
+    <!-- Bot Settings -->
+    <form class="form-card" id="botSettingsForm" style="margin-top: 16px;">
+        <div class="form-row">
+            <div class="form-group">
+                <label>💳 شماره کارت</label>
+                <input type="text" id="botCardNumber" placeholder="6037-xxxx-xxxx-xxxx">
+            </div>
+            <div class="form-group">
+                <label>👤 نام صاحب کارت</label>
+                <input type="text" id="botCardHolder" placeholder="نام و نام خانوادگی">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>☎️ آیدی پشتیبانی</label>
+                <input type="text" id="botSupport" placeholder="@support">
+            </div>
+            <div class="form-group">
+                <label>📢 کانال (الزامی عضویت)</label>
+                <input type="text" id="botChannel" placeholder="@channel">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="botTrial"> اکانت تستی فعال
+                </label>
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="botReferral"> زیرمجموعه‌گیری فعال
+                </label>
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="botForceJoin"> عضویت اجباری کانال
+                </label>
+            </div>
+        </div>
+        <button type="submit" class="btn-primary">💾 ذخیره تنظیمات ربات</button>
+    </form>
+
+    <!-- Admin Management -->
+    <div class="form-card" style="margin-top: 16px;">
+        <h3 style="margin-bottom: 12px;">👥 مدیریت ادمین‌ها</h3>
+        <div class="form-row">
+            <div class="form-group" style="flex: 2;">
+                <label>آیدی عددی ادمین جدید</label>
+                <input type="number" id="newAdminId" placeholder="123456789">
+            </div>
+            <div class="form-group">
+                <label>نام</label>
+                <input type="text" id="newAdminName" placeholder="نام ادمین">
+            </div>
+        </div>
+        <div class="btn-group">
+            <button class="btn-primary" onclick="addAdmin()">➕ افزودن ادمین</button>
+        </div>
+        <div id="adminList" style="margin-top: 12px;"></div>
+    </div>
+
+    <!-- Broadcast -->
+    <div class="form-card" style="margin-top: 16px;">
+        <h3 style="margin-bottom: 12px;">📢 پیام همگانی</h3>
+        <div class="form-group">
+            <label>متن پیام</label>
+            <input type="text" id="broadcastText" placeholder="متن پیام...">
+        </div>
+        <div class="form-group">
+            <label>مخاطب</label>
+            <select id="broadcastTarget">
+                <option value="all">همه کاربران</option>
+                <option value="customers">مشتریان</option>
+                <option value="non_customers">غیر مشتریان</option>
+            </select>
+        </div>
+        <button class="btn-primary" onclick="sendBroadcast()">📢 ارسال پیام</button>
+    </div>
 </div>
 
 <div class="section">
@@ -311,6 +442,111 @@ async function xrayRestart() {
 // Init
 xrayRefresh();
 scannerRefresh();
+botRefresh();
+
+// Bot functions
+async function botRefresh() {
+    const res = await fetch('/api/bot/status');
+    const data = await res.json();
+    if (!data.ok) return;
+    const s = data.status;
+    
+    document.getElementById('botEnabled').textContent = s.enabled ? 'فعال ✅' : 'غیرفعال ❌';
+    document.getElementById('botUsername').textContent = s.bot_username ? '@' + s.bot_username : 'تنظیم نشده';
+    document.getElementById('botWebhook').textContent = s.webhook_set ? 'ست شده ✅' : 'ست نشده';
+    document.getElementById('botUsers').textContent = s.total_users + ' کاربر';
+    document.getElementById('botPending').textContent = s.pending_payments + ' مورد';
+    
+    // Fill settings
+    if (s.card_number) document.getElementById('botCardNumber').value = s.card_number;
+    if (s.trial_enabled !== undefined) document.getElementById('botTrial').checked = s.trial_enabled;
+    if (s.referral_enabled !== undefined) document.getElementById('botReferral').checked = s.referral_enabled;
+    
+    // Show admins
+    const adminList = document.getElementById('adminList');
+    if (s.admins && s.admins.length > 0) {
+        adminList.innerHTML = '<div class="info-table">' + s.admins.map(a => 
+            `<div class="info-row"><span class="info-label">🆔 ${a}</span><button class="btn-danger btn-sm" onclick="removeAdmin('${a}')" style="padding:4px 12px;font-size:12px;">حذف</button></div>`
+        ).join('') + '</div>';
+    }
+}
+
+document.getElementById('botSetupForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const token = document.getElementById('botToken').value;
+    const ownerId = document.getElementById('botOwnerId').value;
+    const domain = document.getElementById('botDomain').value;
+    
+    const res = await fetch('/api/bot/setup', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({token, owner_id: ownerId, domain})
+    });
+    const data = await res.json();
+    alert(data.ok ? 'ربات فعال شد! ' + data.message : 'خطا: ' + data.message);
+    if (data.ok) botRefresh();
+});
+
+document.getElementById('botSettingsForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const settings = {
+        card_number: document.getElementById('botCardNumber').value,
+        card_holder: document.getElementById('botCardHolder').value,
+        support_username: document.getElementById('botSupport').value,
+        channel_id: document.getElementById('botChannel').value,
+        trial_enabled: document.getElementById('botTrial').checked,
+        referral_enabled: document.getElementById('botReferral').checked,
+        force_join: document.getElementById('botForceJoin').checked,
+    };
+    
+    const res = await fetch('/api/bot/settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(settings)
+    });
+    const data = await res.json();
+    alert(data.ok ? 'تنظیمات ربات ذخیره شد ✅' : 'خطا');
+});
+
+async function addAdmin() {
+    const adminId = document.getElementById('newAdminId').value;
+    const name = document.getElementById('newAdminName').value;
+    if (!adminId) { alert('آیدی را وارد کنید'); return; }
+    
+    const res = await fetch('/api/bot/admin', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({action: 'add', admin_id: adminId, name: name})
+    });
+    const data = await res.json();
+    alert(data.ok ? 'ادمین اضافه شد ✅' : 'خطا: ' + data.message);
+    if (data.ok) botRefresh();
+}
+
+async function removeAdmin(adminId) {
+    const res = await fetch('/api/bot/admin', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({action: 'remove', admin_id: adminId})
+    });
+    const data = await res.json();
+    alert(data.ok ? 'ادمین حذف شد' : 'خطا');
+    botRefresh();
+}
+
+async function sendBroadcast() {
+    const text = document.getElementById('broadcastText').value;
+    const target = document.getElementById('broadcastTarget').value;
+    if (!text) { alert('متن پیام را وارد کنید'); return; }
+    
+    const res = await fetch('/api/bot/broadcast', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({text, target})
+    });
+    const data = await res.json();
+    alert(data.ok ? data.message : 'خطا');
+}
 
 // Scanner functions
 async function scannerRefresh() {
