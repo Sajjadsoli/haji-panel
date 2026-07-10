@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>پنل مدیریت - {{ subdomain }}</title>
+    <title>{{ branding.sub_link_title }} - {{ subdomain }}</title>
     <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;700;900&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -367,9 +367,10 @@
     <div class="container">
         <!-- Header -->
         <div class="header">
-            <h1>🛡️ پنل مدیریت ساب‌دامنه</h1>
+            <h1>{{ branding.logo_text }}</h1>
             <div class="sub-url">{{ subdomain }}</div>
             <br>
+            <div style="font-size: 14px; color: var(--text-dim); margin-bottom: 4px;">{{ branding.sub_link_subtitle }}</div>
             <div id="statusBadge" class="status-badge status-active">
                 <span class="status-dot" style="background: var(--success)"></span>
                 <span id="statusText">فعال</span>
@@ -514,6 +515,11 @@
                 کانفیگ‌های زیر را کپی کرده و در کلاینت VPN خود (V2rayN، V2rayNG، Streisand، etc.) ایمپورت کنید.
             </p>
             <div id="configsList"></div>
+        </div>
+
+        <!-- Footer -->
+        <div style="text-align: center; padding: 20px; color: var(--text-dim); font-size: 13px;">
+            {{ branding.footer_text }}
         </div>
     </div>
 

@@ -178,7 +178,7 @@ class TrafficMonitor:
                 result.append(s)
         return result
 
-    def get_configs(self, name, server_ip=""):
+    def get_configs(self, name, server_ip="", config_prefix="Haji"):
         """تولید کانفیگ‌های قابل کپی برای ساب‌دامنه"""
         import base64
         import uuid as uuid_mod
@@ -191,6 +191,7 @@ class TrafficMonitor:
         uid = str(uuid_mod.uuid4())
         port = sub.get("port", 443)
         host = name
+        prefix = config_prefix or "Haji"
 
         configs = []
 
@@ -199,13 +200,13 @@ class TrafficMonitor:
             "type": "vless",
             "name": "VLESS Reality",
             "icon": "🟢",
-            "link": f"vless://{uid}@{host}:443?encryption=none&security=reality&sni={host}&fp=chrome&type=tcp&flow=xtls-rprx-vision#Haji-{name}",
+            "link": f"vless://{uid}@{host}:443?encryption=none&security=reality&sni={host}&fp=chrome&type=tcp&flow=xtls-rprx-vision#{prefix}-{name}",
             "desc": "VLESS با Reality - ضد‌فیلتر قوی"
         })
 
         # VMess
         vmess_json = json.dumps({
-            "v": "2", "ps": f"Haji-{name}",
+            "v": "2", "ps": f"{prefix}-{name}",
             "add": host, "port": "443",
             "id": uid, "aid": "0",
             "net": "ws", "type": "none",
@@ -226,7 +227,7 @@ class TrafficMonitor:
             "type": "trojan",
             "name": "Trojan",
             "icon": "🟣",
-            "link": f"trojan://{uid}@{host}:443?security=tls&sni={host}#Haji-{name}",
+            "link": f"trojan://{uid}@{host}:443?security=tls&sni={host}#{prefix}-{name}",
             "desc": "Trojan با TLS"
         })
 
@@ -235,7 +236,7 @@ class TrafficMonitor:
             "type": "vless-grpc",
             "name": "VLESS gRPC",
             "icon": "🟡",
-            "link": f"vless://{uid}@{host}:443?encryption=none&security=tls&sni={host}&type=grpc&serviceName=haji&mode=gun#Haji-gRPC-{name}",
+            "link": f"vless://{uid}@{host}:443?encryption=none&security=tls&sni={host}&type=grpc&serviceName=haji&mode=gun#{prefix}-gRPC-{name}",
             "desc": "VLESS با gRPC - مناسب CDN"
         })
 
@@ -244,7 +245,7 @@ class TrafficMonitor:
             "type": "ss",
             "name": "Shadowsocks",
             "icon": "🔴",
-            "link": f"ss://YWVzLTI1Ni1nY206{uid[:16]}@{host}:8388#Haji-SS-{name}",
+            "link": f"ss://YWVzLTI1Ni1nY206{uid[:16]}@{host}:8388#{prefix}-SS-{name}",
             "desc": "Shadowsocks - سبک و سریع"
         })
 

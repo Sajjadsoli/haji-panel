@@ -17,7 +17,38 @@ app.secret_key = os.environ.get("SECRET_KEY", "haji-panel-secret-change-me")
 CONFIG_DIR = "/opt/haji-panel/config"
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 DOMAIN_FILE = os.path.join(CONFIG_DIR, "domain.json")
+BRANDING_FILE = os.path.join(CONFIG_DIR, "branding.json")
 PANEL_PASSWORD = os.environ.get("PANEL_PASSWORD", "admin")
+
+# ─── Branding ───────────────────────────────────────────────
+
+DEFAULT_BRANDING = {
+    "panel_title": "Haji Panel",
+    "panel_subtitle": "پنل مدیریت سرور ضد‌فیلتر",
+    "sub_link_title": "Haji Panel",
+    "sub_link_subtitle": "پنل مدیریت اتصال",
+    "logo_text": "🛡️ Haji Panel",
+    "primary_color": "#00d4ff",
+    "secondary_color": "#7b2ff7",
+    "footer_text": "ساخته شده با ❤️ برای اینترنت آزاد",
+    "config_prefix": "Haji",
+}
+
+def load_branding():
+    try:
+        with open(BRANDING_FILE) as f:
+            cfg = json.load(f)
+            # Merge with defaults
+            result = DEFAULT_BRANDING.copy()
+            result.update(cfg)
+            return result
+    except Exception:
+        return DEFAULT_BRANDING.copy()
+
+def save_branding(cfg):
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    with open(BRANDING_FILE, "w") as f:
+        json.dump(cfg, f, indent=2, ensure_ascii=False)
 
 # ─── Auth ───────────────────────────────────────────────────
 
@@ -154,7 +185,8 @@ def firewall_page():
 @app.route("/settings")
 def settings_page():
     config = load_config()
-    return render_template("settings.html", config=config)
+    branding = load_branding()
+    return render_template("settings.html", config=config, branding=branding)
 
 # ─── API ────────────────────────────────────────────────────
 
@@ -231,13 +263,64 @@ def api_domain():
     ok, msg = run_cmd("nginx -t && systemctl reload nginx")
     return jsonify({"ok": ok, "message": f"دامنه {domain} اضافه شد"})
 
+# ─── Branding API ───────────────────────────────────────────
+
+@app.route("/api/branding", methods=["GET"])
+def api_get_branding():
+    return jsonify({"ok": True, "branding": load_branding()})
+
+@app.route("/api/branding", methods=["POST"])
+def api_save_branding():
+    data = request.json or {}
+    branding = load_branding()
+    for key in DEFAULT_BRANDING:
+        if key in data:
+            branding[key] = data[key]
+    save_branding(branding)
+    return jsonify({"ok": True, "message": "برندینگ ذخیره شد"})
+
+# ─── Xray API ───────────────────────────────────────────────
+
+@app.route("/api/xray/status")
+def api_xray_status():
+    ok, msg = run_cmd("systemctl is-active xray 2>/dev/null")
+    version_ok, version = run_cmd("/usr/local/xray/xray version 2>/dev/null | head -1")
+    return jsonify({
+        "ok": True,
+        "running": ok and "active" in msg,
+        "version": version if version_ok else "نامشخص"
+    })
+
+@app.route("/api/xray/restart")
+def api_xray_restart():
+    ok, msg = run_cmd("systemctl restart xray")
+    return jsonify({"ok": ok, "message": "Xray راه‌اندازی مجدد شد" if ok else msg})
+
+@app.route("/api/xray/config")
+def api_xray_config():
+    ok, content = run_cmd("cat /usr/local/xray/config/config.json 2>/dev/null")
+    return jsonify({"ok": ok, "config": content})
+
+@app.route("/api/xray/inbounds")
+def api_xray_inbounds():
+    ok, content = run_cmd("cat /usr/local/xray/config/config.json 2>/dev/null")
+    if not ok:
+        return jsonify({"ok": False, "inbounds": []})
+    try:
+        cfg = json.loads(content)
+        inbounds = cfg.get("inbounds", [])
+        return jsonify({"ok": True, "inbounds": inbounds})
+    except Exception:
+        return jsonify({"ok": False, "inbounds": []})
+
 # ─── Subdomain Panel (Graphical) ─────────────────────────
 
 @app.route("/subdomain-panel")
 def subdomain_panel_page():
     """پنل گرافیکی ساب‌دامنه"""
     subdomain = request.args.get("name", request.host)
-    return render_template("subdomain_panel.html", subdomain=subdomain)
+    branding = load_branding()
+    return render_template("subdomain_panel.html", subdomain=subdomain, branding=branding)
 
 @app.route("/api/traffic/<path:subdomain>")
 def api_traffic_status(subdomain):
@@ -277,7 +360,8 @@ def api_traffic_configs(subdomain):
     """دریافت کانفیگ‌های قابل کپی ساب‌دامنه"""
     from core.traffic_monitor import TrafficMonitor
     tm = TrafficMonitor()
-    configs = tm.get_configs(subdomain)
+    branding = load_branding()
+    configs = tm.get_configs(subdomain, config_prefix=branding.get("config_prefix", "Haji"))
     return jsonify({"ok": True, "configs": configs})
 
 @app.route("/sub/<path:subdomain>")
@@ -286,7 +370,8 @@ def sub_subscription(subdomain):
     import base64
     from core.traffic_monitor import TrafficMonitor
     tm = TrafficMonitor()
-    configs = tm.get_configs(subdomain)
+    branding = load_branding()
+    configs = tm.get_configs(subdomain, config_prefix=branding.get("config_prefix", "Haji"))
     # Only proxy configs (not subscription link itself)
     links = [c["link"] for c in configs if c["type"] != "sub"]
     sub_content = base64.b64encode("\n".join(links).encode()).decode()

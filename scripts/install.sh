@@ -88,9 +88,102 @@ install_deps() {
     log_ok "پیش‌نیازها نصب شدند"
 }
 
+# Install Xray-core
+install_xray() {
+    log_step "۲. نصب Xray-core"
+    
+    XRAY_VER=$(curl -sL "https://api.github.com/repos/XTLS/Xray-core/releases/latest" | grep '"tag_name"' | cut -d'"' -f4)
+    if [[ -z "$XRAY_VER" ]]; then
+        XRAY_VER="v25.6.18"
+    fi
+    
+    log_info "نسخه Xray: $XRAY_VER"
+    
+    ARCH=$(arch)
+    XRAY_FILE="xray-linux-${ARCH}.zip"
+    XRAY_URL="https://github.com/XTLS/Xray-core/releases/download/${XRAY_VER}/${XRAY_FILE}"
+    
+    cd /tmp
+    curl -sL "$XRAY_URL" -o "$XRAY_FILE"
+    
+    mkdir -p /usr/local/xray
+    unzip -o "$XRAY_FILE" -d /usr/local/xray/
+    chmod +x /usr/local/xray/xray
+    
+    # Create config directory
+    mkdir -p /usr/local/xray/config
+    mkdir -p /usr/local/xray/assets
+    
+    # Download geo data
+    curl -sL "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat" -o /usr/local/xray/assets/geoip.dat
+    curl -sL "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat" -o /usr/local/xray/assets/geosite.dat
+    
+    # Default Xray config
+    cat > /usr/local/xray/config/config.json << 'XRAYEOF'
+{
+  "log": {
+    "loglevel": "warning",
+    "access": "/var/log/xray/access.log",
+    "error": "/var/log/xray/error.log"
+  },
+  "inbounds": [],
+  "outbounds": [
+    {
+      "protocol": "freedom",
+      "tag": "direct"
+    },
+    {
+      "protocol": "blackhole",
+      "tag": "block"
+    }
+  ],
+  "routing": {
+    "domainStrategy": "IPIfNonMatch",
+    "rules": [
+      {
+        "type": "field",
+        "outboundTag": "block",
+        "protocol": ["bittorrent"]
+      }
+    ]
+  }
+}
+XRAYEOF
+
+    # Create log directory
+    mkdir -p /var/log/xray
+    touch /var/log/xray/access.log /var/log/xray/error.log
+    
+    # Create systemd service for Xray
+    cat > /etc/systemd/system/xray.service << 'XRAYSVCEOF'
+[Unit]
+Description=Xray Service
+Documentation=https://github.com/xtls
+After=network.target nss-lookup.target
+
+[Service]
+User=root
+ExecStart=/usr/local/xray/xray run -config /usr/local/xray/config/config.json
+Restart=on-failure
+RestartPreventExitStatus=23
+LimitNPROC=10000
+LimitNOFILE=1000000
+
+[Install]
+WantedBy=multi-user.target
+XRAYSVCEOF
+
+    systemctl daemon-reload
+    systemctl enable xray
+    systemctl start xray
+    
+    rm -f /tmp/$XRAY_FILE
+    log_ok "Xray-core نصب و فعال شد"
+}
+
 # Install Cloudflare Warp
 install_warp() {
-    log_step "۲. نصب Cloudflare Warp (ضد‌فیلتر)"
+    log_step "۳. نصب Cloudflare Warp (ضد‌فیلتر)"
     
     if command -v warp-cli &>/dev/null; then
         log_ok "Warp قبلاً نصب شده است"
@@ -120,7 +213,7 @@ install_warp() {
 
 # Configure DoH (DNS over HTTPS)
 configure_doh() {
-    log_step "۳. کانفیگ DNS over HTTPS (DoH)"
+    log_step "۴. کانفیگ DNS over HTTPS (DoH)"
     
     # Backup original resolv.conf
     [[ -f /etc/resolv.conf ]] && cp /etc/resolv.conf /etc/resolv.conf.backup
@@ -156,7 +249,7 @@ DNSEOF
 
 # Configure Nginx
 configure_nginx() {
-    log_step "۴. کانفیگ Nginx"
+    log_step "۵. کانفیگ Nginx"
     
     # Remove default site
     rm -f /etc/nginx/sites-enabled/default
@@ -214,7 +307,7 @@ NGINXEOF
 
 # Configure Firewall
 configure_firewall() {
-    log_step "۵. کانفیگ فایروال (UFW)"
+    log_step "۶. کانفیگ فایروال (UFW)"
     
     ufw --force reset
     
@@ -232,7 +325,7 @@ configure_firewall() {
 
 # Install Panel
 install_panel() {
-    log_step "۶. نصب پنل وب"
+    log_step "۷. نصب پنل وب"
     
     INSTALL_DIR="/opt/haji-panel"
     
@@ -272,7 +365,17 @@ install_panel() {
     "doh_servers": [
         "https://cloudflare-dns.com/dns-query",
         "https://dns.google/dns-query"
-    ]
+    ],
+    "branding": {
+        "panel_title": "Haji Panel",
+        "panel_subtitle": "پنل مدیریت سرور ضد‌فیلتر",
+        "sub_link_title": "Haji Panel",
+        "sub_link_subtitle": "پنل مدیریت اتصال",
+        "logo_text": "🛡️ Haji Panel",
+        "primary_color": "#00d4ff",
+        "secondary_color": "#7b2ff7",
+        "footer_text": "ساخته شده با ❤️ برای اینترنت آزاد"
+    }
 }
 CONFEOF
     
@@ -291,7 +394,7 @@ ENVEOF
 
 # Create systemd service
 create_service() {
-    log_step "۷. ساخت سرویس systemd"
+    log_step "۸. ساخت سرویس systemd"
     
     cat > /etc/systemd/system/haji-panel.service << 'SVCEOF'
 [Unit]
@@ -321,7 +424,7 @@ SVCEOF
 
 # Get user input for domain setup
 setup_domain() {
-    log_step "۸. تنظیم دامنه و SSL"
+    log_step "۹. تنظیم دامنه و SSL"
     
     echo -e "${BOLD}برای تنظیم دامنه و SSL، اطلاعات زیر را وارد کنید:${NC}"
     echo -e "  (اگر دامنه ندارید، Enter بزنید تا بعداً تنظیم کنید)\n"
@@ -431,6 +534,7 @@ main() {
     check_root
     check_os
     install_deps
+    install_xray
     install_warp
     configure_doh
     configure_nginx

@@ -37,6 +37,80 @@
 </div>
 
 <div class="section">
+    <h2 class="section-title">🎨 شخصی‌سازی برندینگ (Branding)</h2>
+    <div class="guide-card">
+        <p>اسم نمایشی ساب‌لینک، عنوان پنل و رنگ‌ها را شخصی‌سازی کنید. این تنظیمات روی پنل ساب‌لینک کاربران اعمال می‌شود.</p>
+    </div>
+    <form class="form-card" id="brandingForm">
+        <div class="form-row">
+            <div class="form-group">
+                <label>🏷️ عنوان پنل ادمین</label>
+                <input type="text" id="brPanelTitle" value="{{ branding.panel_title }}" placeholder="Haji Panel">
+            </div>
+            <div class="form-group">
+                <label>📝 زیرعنوان پنل ادمین</label>
+                <input type="text" id="brPanelSubtitle" value="{{ branding.panel_subtitle }}" placeholder="پنل مدیریت سرور">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>🔗 عنوان ساب‌لینک (نمایشی)</label>
+                <input type="text" id="brSubLinkTitle" value="{{ branding.sub_link_title }}" placeholder="Haji Panel">
+                <small style="color: var(--text-muted); font-size: 11px;">این اسم در پنل ساب‌لینک کاربران نمایش داده می‌شود</small>
+            </div>
+            <div class="form-group">
+                <label>📝 زیرعنوان ساب‌لینک</label>
+                <input type="text" id="brSubLinkSubtitle" value="{{ branding.sub_link_subtitle }}" placeholder="پنل مدیریت اتصال">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>🏷️ پیشوند کانفیگ‌ها</label>
+                <input type="text" id="brConfigPrefix" value="{{ branding.config_prefix }}" placeholder="Haji">
+                <small style="color: var(--text-muted); font-size: 11px;">کانفیگ‌ها با این پیشوند نام‌گذاری می‌شوند (مثال: Haji-app.example.com)</small>
+            </div>
+            <div class="form-group">
+                <label>🛡️ متن لوگو</label>
+                <input type="text" id="brLogoText" value="{{ branding.logo_text }}" placeholder="🛡️ Haji Panel">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>🎨 رنگ اصلی</label>
+                <input type="color" id="brPrimaryColor" value="{{ branding.primary_color }}" style="height: 40px; cursor: pointer;">
+            </div>
+            <div class="form-group">
+                <label>🎨 رنگ ثانویه</label>
+                <input type="color" id="brSecondaryColor" value="{{ branding.secondary_color }}" style="height: 40px; cursor: pointer;">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>📄 متن فوتر</label>
+            <input type="text" id="brFooterText" value="{{ branding.footer_text }}" placeholder="ساخته شده با ❤️">
+        </div>
+        <button type="submit" class="btn-primary">💾 ذخیره برندینگ</button>
+    </form>
+</div>
+
+<div class="section">
+    <h2 class="section-title">⚡ مدیریت Xray</h2>
+    <div class="info-table">
+        <div class="info-row">
+            <span class="info-label">وضعیت Xray</span>
+            <span class="info-value" id="xrayStatus">در حال بررسی...</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">نسخه</span>
+            <span class="info-value" id="xrayVersion">—</span>
+        </div>
+    </div>
+    <div class="btn-group" style="margin-top: 16px;">
+        <button class="btn-primary" onclick="xrayRestart()">🔁 راه‌اندازی مجدد Xray</button>
+        <button class="btn-secondary" onclick="xrayRefresh()">🔄 بروزرسانی وضعیت</button>
+    </div>
+</div>
+
+<div class="section">
     <h2 class="section-title">📦 پیکربندی</h2>
     <div class="info-table">
         <div class="info-row">
@@ -67,12 +141,13 @@
 </div>
 
 <div class="section">
-    <h2 class="section-title">ℹ️ درباره Haji Panel</h2>
+    <h2 class="section-title">ℹ️ درباره {{ branding.panel_title }}</h2>
     <div class="guide-card">
-        <p><strong>Haji Panel v1.0.0</strong></p>
-        <p>پنل مدیریت سرور ضد‌فیلتر</p>
+        <p><strong>{{ branding.panel_title }} v1.0.0</strong></p>
+        <p>{{ branding.panel_subtitle }}</p>
         <p>GitHub: <a href="https://github.com/Sajjadsoli/haji-panel" target="_blank">github.com/Sajjadsoli/haji-panel</a></p>
         <p>لایسنس: MIT</p>
+        <p style="margin-top: 8px; color: var(--text-muted);">{{ branding.footer_text }}</p>
     </div>
 </div>
 
@@ -93,5 +168,48 @@ async function loadLogs() {
     const data = await res.json();
     document.getElementById('logResult').innerHTML = `<pre>${data.logs || 'لاگی یافت نشد'}</pre>`;
 }
+
+// Branding
+document.getElementById('brandingForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const branding = {
+        panel_title: document.getElementById('brPanelTitle').value,
+        panel_subtitle: document.getElementById('brPanelSubtitle').value,
+        sub_link_title: document.getElementById('brSubLinkTitle').value,
+        sub_link_subtitle: document.getElementById('brSubLinkSubtitle').value,
+        config_prefix: document.getElementById('brConfigPrefix').value,
+        logo_text: document.getElementById('brLogoText').value,
+        primary_color: document.getElementById('brPrimaryColor').value,
+        secondary_color: document.getElementById('brSecondaryColor').value,
+        footer_text: document.getElementById('brFooterText').value,
+    };
+    
+    const res = await fetch('/api/branding', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(branding)
+    });
+    const data = await res.json();
+    alert(data.ok ? 'برندینگ ذخیره شد ✅' : 'خطا: ' + (data.message || ''));
+});
+
+// Xray
+async function xrayRefresh() {
+    const res = await fetch('/api/xray/status');
+    const data = await res.json();
+    document.getElementById('xrayStatus').textContent = data.running ? 'فعال ✅' : 'غیرفعال ❌';
+    document.getElementById('xrayVersion').textContent = data.version;
+}
+
+async function xrayRestart() {
+    if (!confirm('راه‌اندازی مجدد Xray؟')) return;
+    const res = await fetch('/api/xray/restart');
+    const data = await res.json();
+    alert(data.ok ? 'Xray راه‌اندازی شد ✅' : 'خطا');
+    xrayRefresh();
+}
+
+// Init
+xrayRefresh();
 </script>
 {% endblock %}
