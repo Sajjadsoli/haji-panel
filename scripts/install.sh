@@ -457,7 +457,12 @@ CRONEOF
     CRON_CMD="0 */6 * * * /opt/haji-panel/scripts/auto-scan.sh >> /var/log/haji-scanner.log 2>&1"
     (crontab -l 2>/dev/null | grep -v "haji-panel/scripts/auto-scan.sh"; echo "$CRON_CMD") | crontab -
     
+    # Add cron for reseller expiry check
+    CRON_RESELLER="0 */1 * * * cd /opt/haji-panel && python3 -c 'from core.reseller import ResellerManager; ResellerManager().check_expired()' >> /var/log/haji-reseller.log 2>&1"
+    (crontab -l 2>/dev/null | grep -v "haji-reseller"; echo "$CRON_RESELLER") | crontab -
+    
     log_ok "اسکنر خودکار هر ۶ ساعت فعال شد"
+    log_ok "بررسی انقضای نمایندگی هر ساعت فعال شد"
 }
 
 # Get user input for domain setup
@@ -557,6 +562,8 @@ show_summary() {
     echo -e "  💎 اسکنر IP:   هر ۶ ساعت خودکار اسکن می‌کند"
     echo -e "  🤖 ربات تلگرام: از پنل ادمین فعال کنید"
     echo -e "  🖥️ CLI:        haji (منوی مدیریت)"
+    echo -e "  👥 نمایندگی:    از پنل ادمین مدیریت کنید"
+    echo -e "  🛡️ امنیت:      Brute-force + CSRF + Session timeout + IP whitelist"
     echo ""
     echo -e "${BOLD}🛡️ وضعیت ضد‌فیلتر:${NC}"
     echo -e "  Cloudflare Warp:  $(warp-cli status 2>/dev/null | grep -q Connected && echo -e "${GREEN}فعال${NC}" || echo -e "${YELLOW}در حال بررسی${NC}")"
