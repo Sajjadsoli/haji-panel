@@ -29,7 +29,7 @@ PUBLIC_ENDPOINTS = {
     "subdomain_panel_by_key", "api_traffic_status_by_key",
     "api_traffic_configs_by_key", "api_scanner_check_by_key",
     "api_scanner_switch_by_key", "api_traffic_limits_by_key",
-    "api_traffic_reset_by_key"
+    "api_traffic_reset_by_key", "reseller_panel"
 }
 
 # ─── Branding ───────────────────────────────────────────────
@@ -643,6 +643,106 @@ def api_security_whitelist():
         sm.remove_from_whitelist(ip)
         return jsonify({"ok": True, "message": f"IP {ip} حذف شد"})
     return jsonify({"ok": False, "error": "action نامعتبر"})
+
+# ─── Reseller API ───────────────────────────────────────────
+
+@app.route("/api/reseller/list")
+def api_reseller_list():
+    from core.reseller import ResellerManager
+    rm = ResellerManager()
+    resellers = rm.list_resellers()
+    return jsonify({"ok": True, "resellers": resellers})
+
+@app.route("/api/reseller/create", methods=["POST"])
+def api_reseller_create():
+    from core.reseller import ResellerManager
+    rm = ResellerManager()
+    data = request.json or {}
+    result = rm.create_reseller(
+        name=data.get("name", ""),
+        owner_telegram_id=data.get("owner_telegram_id", ""),
+        reseller_type=data.get("type", "volume"),
+        data_limit_gb=data.get("data_limit_gb", 100),
+        max_users=data.get("max_users", 50),
+        duration_days=data.get("duration_days", 30),
+    )
+    return jsonify({"ok": True, "reseller": result})
+
+@app.route("/api/reseller/<reseller_id>")
+def api_reseller_get(reseller_id):
+    from core.reseller import ResellerManager
+    rm = ResellerManager()
+    status = rm.get_status(reseller_id)
+    if status:
+        return jsonify({"ok": True, "status": status})
+    return jsonify({"ok": False, "error": "نماینده یافت نشد"}), 404
+
+@app.route("/api/reseller/<reseller_id>/delete", methods=["POST"])
+def api_reseller_delete(reseller_id):
+    from core.reseller import ResellerManager
+    rm = ResellerManager()
+    ok = rm.delete_reseller(reseller_id)
+    return jsonify({"ok": ok, "message": "نماینده حذف شد" if ok else "خطا"})
+
+@app.route("/api/reseller/<reseller_id>/extend", methods=["POST"])
+def api_reseller_extend(reseller_id):
+    from core.reseller import ResellerManager
+    rm = ResellerManager()
+    data = request.json or {}
+    days = data.get("days", 30)
+    ok = rm.extend_reseller(reseller_id, days)
+    return jsonify({"ok": ok, "message": f"نماینده {days} روز تمدید شد" if ok else "خطا"})
+
+@app.route("/api/reseller/<reseller_id>/add-volume", methods=["POST"])
+def api_reseller_add_volume(reseller_id):
+    from core.reseller import ResellerManager
+    rm = ResellerManager()
+    data = request.json or {}
+    gb = data.get("gb", 10)
+    ok = rm.add_volume(reseller_id, gb)
+    return jsonify({"ok": ok, "message": f"{gb} GB اضافه شد" if ok else "خطا"})
+
+@app.route("/api/reseller/<reseller_id>/add-users", methods=["POST"])
+def api_reseller_add_users(reseller_id):
+    from core.reseller import ResellerManager
+    rm = ResellerManager()
+    data = request.json or {}
+    count = data.get("count", 5)
+    ok = rm.add_users(reseller_id, count)
+    return jsonify({"ok": ok, "message": f"{count} یوزر اضافه شد" if ok else "خطا"})
+
+@app.route("/api/reseller/<reseller_id>/users")
+def api_reseller_users(reseller_id):
+    from core.reseller import ResellerManager
+    rm = ResellerManager()
+    users = rm.list_reseller_users(reseller_id)
+    return jsonify({"ok": True, "users": users})
+
+@app.route("/api/reseller/<reseller_id>/settings", methods=["POST"])
+def api_reseller_settings(reseller_id):
+    from core.reseller import ResellerManager
+    rm = ResellerManager()
+    data = request.json or {}
+    ok = rm.update_reseller_settings(reseller_id, data)
+    return jsonify({"ok": ok, "message": "تنظیمات ذخیره شد" if ok else "خطا"})
+
+@app.route("/api/reseller/check-expired")
+def api_reseller_check_expired():
+    from core.reseller import ResellerManager
+    rm = ResellerManager()
+    rm.check_expired()
+    return jsonify({"ok": True, "message": "بررسی انقضا انجام شد"})
+
+# Reseller panel (public, accessed by panel_key)
+@app.route("/reseller/<panel_key>")
+def reseller_panel(panel_key):
+    from core.reseller import ResellerManager
+    rm = ResellerManager()
+    reseller = rm.get_reseller_by_panel_key(panel_key)
+    if not reseller:
+        abort(404)
+    branding = load_branding()
+    return render_template("subdomain_panel.html", subdomain=reseller.get("name", ""), branding=branding, access_key=panel_key)
 
 # ─── Subdomain Panel (Graphical) ─────────────────────────
 

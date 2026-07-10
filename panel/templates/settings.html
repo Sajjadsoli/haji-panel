@@ -341,6 +341,55 @@
 </div>
 
 <div class="section">
+    <h2 class="section-title">👥 مدیریت نمایندگی (Reseller)</h2>
+    <div class="guide-card">
+        <p>نمایندگی اختصاصی بسازید. هر نماینده می‌تونه حجمی (محدود به حجم) یا نامحدود (محدود به تعداد یوزر) باشه.</p>
+        <p>بعد از انقضا، کانفیگ‌های نماینده غیرفعال می‌شن و ۴ روز فرصت تمدید داره، بعد خودکار حذف می‌شه.</p>
+    </div>
+
+    <!-- Create Reseller -->
+    <form class="form-card" id="resellerCreateForm">
+        <div class="form-row">
+            <div class="form-group">
+                <label>نام نماینده</label>
+                <input type="text" id="rsName" placeholder="نام نمایندگی" required>
+            </div>
+            <div class="form-group">
+                <label>آیدی تلگرام مالک نماینده</label>
+                <input type="number" id="rsOwnerTg" placeholder="123456789">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>نوع نمایندگی</label>
+                <select id="rsType">
+                    <option value="volume">حجمی (محدود به حجم)</option>
+                    <option value="unlimited">نامحدود (محدود به تعداد یوزر)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>حجم (GB) - اگر حجمی</label>
+                <input type="number" id="rsVolume" value="100" min="1">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>حداکثر تعداد یوزر</label>
+                <input type="number" id="rsMaxUsers" value="50" min="1">
+            </div>
+            <div class="form-group">
+                <label>مدت اعتبار (روز)</label>
+                <input type="number" id="rsDuration" value="30" min="1">
+            </div>
+        </div>
+        <button type="submit" class="btn-primary">➕ ساخت نمایندگی</button>
+    </form>
+
+    <!-- Reseller List -->
+    <div id="resellerList" style="margin-top: 20px;"></div>
+</div>
+
+<div class="section">
     <h2 class="section-title">📦 پیکربندی</h2>
     <div class="info-table">
         <div class="info-row">
@@ -443,6 +492,116 @@ async function xrayRestart() {
 xrayRefresh();
 scannerRefresh();
 botRefresh();
+resellerRefresh();
+
+// Reseller functions
+async function resellerRefresh() {
+    const res = await fetch('/api/reseller/list');
+    const data = await res.json();
+    if (!data.ok) return;
+    
+    const list = document.getElementById('resellerList');
+    if (!data.resellers || data.resellers.length === 0) {
+        list.innerHTML = '<p style="color:var(--text-dim);text-align:center;padding:16px;">هنوز نمایندگی ساخته نشده</p>';
+        return;
+    }
+    
+    list.innerHTML = '<h3 style="margin-bottom:12px;">📋 نمایندگی‌های فعال</h3><div class="info-table">' +
+        data.resellers.map(r => {
+            const statusColor = r.status === 'active' ? 'var(--success)' : r.status === 'grace_period' ? 'var(--warning)' : 'var(--danger)';
+            const statusText = r.status === 'active' ? 'فعال' : r.status === 'grace_period' ? 'در دوره تمدید' : r.status === 'expired' ? 'منقضی' : 'حذف شده';
+            return `
+                <div class="info-row" style="flex-direction:column;align-items:stretch;padding:16px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                        <span style="font-weight:700;">🏪 ${r.name}</span>
+                        <span style="color:${statusColor};font-weight:600;">${statusText}</span>
+                    </div>
+                    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--text-dim);">
+                        <span>📊 نوع: ${r.type === 'volume' ? 'حجمی' : 'نامحدود'}</span>
+                        ${r.type === 'volume' ? `<span>💾 حجم: ${r.data_limit_gb || 0} GB</span>` : ''}
+                        <span>👥 یوزر: ${r.current_users || 0}/${r.max_users || 0}</span>
+                        <span>⏰ انقضا: ${r.expires_at ? new Date(r.expires_at).toLocaleDateString('fa-IR') : '—'}</span>
+                    </div>
+                    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+                        <button class="btn-primary btn-sm" onclick="extendReseller('${r.id}')" style="padding:4px 12px;font-size:12px;">⏰ تمدید</button>
+                        <button class="btn-secondary btn-sm" onclick="addVolumeReseller('${r.id}')" style="padding:4px 12px;font-size:12px;">💾 +حجم</button>
+                        <button class="btn-secondary btn-sm" onclick="addUsersReseller('${r.id}')" style="padding:4px 12px;font-size:12px;">👥 +یوزر</button>
+                        <button class="btn-danger btn-sm" onclick="deleteReseller('${r.id}')" style="padding:4px 12px;font-size:12px;">🗑 حذف</button>
+                    </div>
+                </div>
+            `;
+        }).join('') + '</div>';
+}
+
+document.getElementById('resellerCreateForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const res = await fetch('/api/reseller/create', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            name: document.getElementById('rsName').value,
+            owner_telegram_id: document.getElementById('rsOwnerTg').value,
+            type: document.getElementById('rsType').value,
+            data_limit_gb: parseInt(document.getElementById('rsVolume').value),
+            max_users: parseInt(document.getElementById('rsMaxUsers').value),
+            duration_days: parseInt(document.getElementById('rsDuration').value),
+        })
+    });
+    const data = await res.json();
+    if (data.ok) {
+        alert('نمایندگی ساخته شد ✅');
+        resellerRefresh();
+    } else {
+        alert('خطا: ' + (data.error || ''));
+    }
+});
+
+async function extendReseller(id) {
+    const days = prompt('چند روز تمدید؟', '30');
+    if (!days) return;
+    const res = await fetch(`/api/reseller/${id}/extend`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({days: parseInt(days)})
+    });
+    const data = await res.json();
+    alert(data.ok ? 'تمدید شد ✅' : 'خطا');
+    resellerRefresh();
+}
+
+async function addVolumeReseller(id) {
+    const gb = prompt('چند GB اضافه شود؟', '10');
+    if (!gb) return;
+    const res = await fetch(`/api/reseller/${id}/add-volume`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({gb: parseInt(gb)})
+    });
+    const data = await res.json();
+    alert(data.ok ? 'حجم اضافه شد ✅' : 'خطا');
+    resellerRefresh();
+}
+
+async function addUsersReseller(id) {
+    const count = prompt('چند یوزر اضافه شود؟', '5');
+    if (!count) return;
+    const res = await fetch(`/api/reseller/${id}/add-users`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({count: parseInt(count)})
+    });
+    const data = await res.json();
+    alert(data.ok ? 'یوزر اضافه شد ✅' : 'خطا');
+    resellerRefresh();
+}
+
+async function deleteReseller(id) {
+    if (!confirm('این نماینده حذف شود؟')) return;
+    const res = await fetch(`/api/reseller/${id}/delete`, {method: 'POST'});
+    const data = await res.json();
+    alert(data.ok ? 'حذف شد' : 'خطا');
+    resellerRefresh();
+}
 
 // Bot functions
 async function botRefresh() {
