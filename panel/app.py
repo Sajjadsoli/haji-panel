@@ -313,6 +313,58 @@ def api_xray_inbounds():
     except Exception:
         return jsonify({"ok": False, "inbounds": []})
 
+# ─── IP Scanner API ─────────────────────────────────────────
+
+@app.route("/api/scanner/status")
+def api_scanner_status():
+    from core.ip_scanner import IPScanner
+    scanner = IPScanner()
+    return jsonify({"ok": True, "status": scanner.get_status()})
+
+@app.route("/api/scanner/settings", methods=["POST"])
+def api_scanner_settings():
+    from core.ip_scanner import IPScanner
+    scanner = IPScanner()
+    data = request.json or {}
+    scanner.update_settings(data)
+    return jsonify({"ok": True, "message": "تنظیمات اسکنر ذخیره شد"})
+
+@app.route("/api/scanner/scan", methods=["POST"])
+def api_scanner_scan():
+    from core.ip_scanner import IPScanner
+    scanner = IPScanner()
+    data = request.json or {}
+    result = scanner.scan(
+        base_config=data.get("base_config"),
+        cdn_targets=data.get("cdn_targets"),
+        max_ips=data.get("max_ips"),
+        workers=data.get("workers"),
+    )
+    return jsonify(result)
+
+@app.route("/api/scanner/check/<path:subdomain>")
+def api_scanner_check(subdomain):
+    from core.ip_scanner import IPScanner
+    scanner = IPScanner()
+    result = scanner.check_current_ip(subdomain)
+    return jsonify({"ok": True, "check": result})
+
+@app.route("/api/scanner/switch/<path:subdomain>", methods=["POST"])
+def api_scanner_switch(subdomain):
+    from core.ip_scanner import IPScanner
+    scanner = IPScanner()
+    ok, msg = scanner.auto_switch_if_filtered(subdomain)
+    return jsonify({"ok": ok, "message": msg})
+
+@app.route("/api/scanner/assign/<path:subdomain>", methods=["POST"])
+def api_scanner_assign(subdomain):
+    from core.ip_scanner import IPScanner
+    scanner = IPScanner()
+    data = request.json or {}
+    ip_info = data.get("ip_info")
+    ok, msg = scanner.assign_ip(subdomain, ip_info)
+    return jsonify({"ok": ok, "message": msg})
+
 # ─── Subdomain Panel (Graphical) ─────────────────────────
 
 @app.route("/subdomain-panel")
@@ -362,6 +414,18 @@ def api_traffic_configs(subdomain):
     tm = TrafficMonitor()
     branding = load_branding()
     configs = tm.get_configs(subdomain, config_prefix=branding.get("config_prefix", "Haji"))
+    
+    # Inject clean IP if available
+    from core.ip_scanner import IPScanner
+    scanner = IPScanner()
+    current_ip = scanner.get_status().get("current_ips", {}).get(subdomain)
+    if current_ip:
+        # Replace host in config links with clean IP
+        for c in configs:
+            if c["type"] != "sub":
+                c["link"] = c["link"].replace(f"@{subdomain}:", f"@{current_ip['ip']}:").replace(f"@{subdomain}/", f"@{current_ip['ip']}/")
+                c["desc"] += f" • 💎 IP: {current_ip['ip']}"
+    
     return jsonify({"ok": True, "configs": configs})
 
 @app.route("/sub/<path:subdomain>")

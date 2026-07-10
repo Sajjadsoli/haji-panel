@@ -512,9 +512,17 @@
         <div class="card">
             <div class="card-title">🔗 کانفیگ‌های اتصال</div>
             <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px;">
-                کانفیگ‌های زیر را کپی کرده و در کلاینت VPN خود (V2rayN، V2rayNG، Streisand، etc.) ایمپورت کنید.
+                کانفیگ‌های زیر با 💎 آی‌پی تمیز تولید شده‌اند. کپی کرده و در کلاینت VPN خود ایمپورت کنید.
             </p>
             <div id="configsList"></div>
+        </div>
+
+        <!-- Clean IP Status -->
+        <div class="card">
+            <div class="card-title">💎 وضعیت آی‌پی تمیز</div>
+            <div id="cleanIpStatus" style="text-align: center; padding: 20px;">
+                <div style="font-size: 14px; color: var(--text-dim);">در حال بررسی...</div>
+            </div>
         </div>
 
         <!-- Footer -->
@@ -740,7 +748,49 @@
     // Auto refresh every 10 seconds
     loadData();
     loadConfigs();
+    loadCleanIpStatus();
     setInterval(loadData, 10000);
+    setInterval(loadCleanIpStatus, 30000);
+
+    async function loadCleanIpStatus() {
+        try {
+            const res = await fetch('/api/scanner/check/' + encodeURIComponent(SUBDOMAIN));
+            const data = await res.json();
+            if (!data.ok) return;
+            const check = data.check;
+            const el = document.getElementById('cleanIpStatus');
+            
+            if (check.filtered) {
+                el.innerHTML = `
+                    <div style="font-size: 36px; margin-bottom: 12px;">⛔</div>
+                    <div style="font-size: 16px; color: var(--danger); font-weight: 700;">آی‌پی فیلتر شده!</div>
+                    <div style="font-size: 13px; color: var(--text-dim); margin-top: 8px;">IP: ${check.ip || 'نامشخص'}</div>
+                    <button class="btn btn-primary" style="margin-top: 12px;" onclick="switchIp()">🔄 تعویض خودکار IP</button>
+                `;
+            } else {
+                el.innerHTML = `
+                    <div style="font-size: 36px; margin-bottom: 12px;">💎</div>
+                    <div style="font-size: 16px; color: var(--success); font-weight: 700;">آی‌پی تمیز و سالم</div>
+                    <div style="font-size: 13px; color: var(--text-dim); margin-top: 8px;">IP: ${check.ip}</div>
+                    <div style="font-size: 12px; color: var(--text-dim); margin-top: 4px;">آخرین بررسی: ${new Date(check.last_check).toLocaleTimeString('fa-IR')}</div>
+                `;
+            }
+        } catch(e) {
+            console.error('Clean IP status error:', e);
+        }
+    }
+
+    async function switchIp() {
+        const res = await fetch('/api/scanner/switch/' + encodeURIComponent(SUBDOMAIN), {method: 'POST'});
+        const data = await res.json();
+        if (data.ok) {
+            alert('IP تعویض شد ✅\n' + data.message);
+            loadCleanIpStatus();
+            loadConfigs();
+        } else {
+            alert('خطا: ' + data.message);
+        }
+    }
 
     async function loadConfigs() {
         try {

@@ -422,9 +422,43 @@ SVCEOF
     log_ok "سرویس haji-panel فعال شد"
 }
 
+# Setup scanner cron job
+setup_scanner_cron() {
+    log_step "۹. تنظیم اسکنر خودکار آی‌پی تمیز"
+    
+    # Create scanner cron script
+    cat > /opt/haji-panel/scripts/auto-scan.sh << 'CRONEOF'
+#!/bin/bash
+# Haji Panel - Auto IP Scanner Cron Job
+cd /opt/haji-panel
+source venv/bin/activate 2>/dev/null
+python3 -c "
+from core.ip_scanner import IPScanner
+scanner = IPScanner()
+settings = scanner.get_settings()
+if settings.get('enabled', False):
+    print('Starting auto scan...')
+    result = scanner.scan()
+    print(f'Scan complete: {result}')
+    # Auto-switch filtered IPs
+    for sub in settings.get('current_ips', {}):
+        ok, msg = scanner.auto_switch_if_filtered(sub)
+        if not ok:
+            print(f'Auto-switch failed for {sub}: {msg}')
+"
+CRONEOF
+    chmod +x /opt/haji-panel/scripts/auto-scan.sh
+    
+    # Add cron job (every 6 hours by default)
+    CRON_CMD="0 */6 * * * /opt/haji-panel/scripts/auto-scan.sh >> /var/log/haji-scanner.log 2>&1"
+    (crontab -l 2>/dev/null | grep -v "haji-panel/scripts/auto-scan.sh"; echo "$CRON_CMD") | crontab -
+    
+    log_ok "اسکنر خودکار هر ۶ ساعت فعال شد"
+}
+
 # Get user input for domain setup
 setup_domain() {
-    log_step "۹. تنظیم دامنه و SSL"
+    log_step "۱۰. تنظیم دامنه و SSL"
     
     echo -e "${BOLD}برای تنظیم دامنه و SSL، اطلاعات زیر را وارد کنید:${NC}"
     echo -e "  (اگر دامنه ندارید، Enter بزنید تا بعداً تنظیم کنید)\n"
@@ -516,6 +550,7 @@ show_summary() {
     echo -e "  🔑 رمز عبور:  ${YELLOW}$PANEL_PASS${NC}"
     echo -e "  📁 مسیر نصب:  /opt/haji-panel"
     echo -e "  🔧 سرویس:     systemctl {start|stop|restart} haji-panel"
+    echo -e "  💎 اسکنر IP:   هر ۶ ساعت خودکار اسکن می‌کند"
     echo ""
     echo -e "${BOLD}🛡️ وضعیت ضد‌فیلتر:${NC}"
     echo -e "  Cloudflare Warp:  $(warp-cli status 2>/dev/null | grep -q Connected && echo -e "${GREEN}فعال${NC}" || echo -e "${YELLOW}در حال بررسی${NC}")"
@@ -541,6 +576,7 @@ main() {
     configure_firewall
     install_panel
     create_service
+    setup_scanner_cron
     setup_domain
     show_summary
 }
