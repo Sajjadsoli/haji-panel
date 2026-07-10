@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>پنل مدیریت - {{ subdomain }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a1a;
+            --bg-card: #12122a;
+            --bg-glass: rgba(18, 18, 42, 0.7);
+            --text: #e4e6eb;
+            --text-dim: #8b8fa3;
+            --accent: #00d4ff;
+            --accent2: #7b2ff7;
+            --success: #00e676;
+            --warning: #ffab00;
+            --danger: #ff3d71;
+            --border: rgba(255,255,255,0.08);
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: 'Vazirmatn', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        /* Animated background */
+        .bg-animation {
+            position: fixed; top:0; left:0; width:100%; height:100%;
+            z-index: -1; overflow: hidden;
+        }
+        .bg-animation::before, .bg-animation::after {
+            content: ''; position: absolute; border-radius: 50%;
+            filter: blur(80px); opacity: 0.15;
+        }
+        .bg-animation::before {
+            width: 500px; height: 500px; background: var(--accent);
+            top: -100px; right: -100px;
+            animation: float1 20s infinite ease-in-out;
+        }
+        .bg-animation::after {
+            width: 400px; height: 400px; background: var(--accent2);
+            bottom: -100px; left: -100px;
+            animation: float2 25s infinite ease-in-out;
+        }
+        @keyframes float1 {
+            0%,100% { transform: translate(0,0); }
+            50% { transform: translate(-100px, 100px); }
+        }
+        @keyframes float2 {
+            0%,100% { transform: translate(0,0); }
+            50% { transform: translate(100px, -100px); }
+        }
+
+        .container { max-width: 900px; margin: 0 auto; padding: 20px; }
+
+        /* Header */
+        .header {
+            text-align: center;
+            padding: 30px 20px;
+            margin-bottom: 24px;
+        }
+        .header h1 {
+            font-size: 28px; font-weight: 900;
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 8px;
+        }
+        .header .sub-url {
+            font-size: 14px; color: var(--text-dim);
+            background: var(--bg-card); padding: 6px 16px;
+            border-radius: 20px; border: 1px solid var(--border);
+            display: inline-block;
+        }
+        .status-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 6px 16px; border-radius: 20px;
+            font-size: 13px; font-weight: 600;
+            margin-top: 12px;
+        }
+        .status-active { background: rgba(0,230,118,0.15); color: var(--success); border: 1px solid rgba(0,230,118,0.3); }
+        .status-expired { background: rgba(255,61,113,0.15); color: var(--danger); border: 1px solid rgba(255,61,113,0.3); }
+        .status-exceeded { background: rgba(255,171,0,0.15); color: var(--warning); border: 1px solid rgba(255,171,0,0.3); }
+        .status-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+        /* Cards */
+        .card {
+            background: var(--bg-glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 28px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+        .card:hover { border-color: rgba(0,212,255,0.2); }
+
+        .card-title {
+            font-size: 16px; font-weight: 700; margin-bottom: 20px;
+            display: flex; align-items: center; gap: 8px;
+        }
+
+        /* Circular Progress */
+        .circles-row {
+            display: flex; gap: 20px; flex-wrap: wrap; justify-content: center;
+        }
+        .circle-card {
+            flex: 1; min-width: 200px; text-align: center;
+            padding: 20px;
+        }
+        .circle-wrap {
+            position: relative; width: 160px; height: 160px;
+            margin: 0 auto 16px;
+        }
+        .circle-svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+        .circle-bg {
+            fill: none; stroke: rgba(255,255,255,0.06); stroke-width: 8;
+        }
+        .circle-fill {
+            fill: none; stroke-width: 8; stroke-linecap: round;
+            transition: stroke-dashoffset 1s ease;
+        }
+        .circle-data .circle-fill { stroke: url(#gradData); }
+        .circle-time .circle-fill { stroke: url(#gradTime); }
+        .circle-text {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+        .circle-value {
+            font-size: 28px; font-weight: 900;
+        }
+        .circle-label {
+            font-size: 12px; color: var(--text-dim); margin-top: 2px;
+        }
+
+        /* Linear Progress */
+        .progress-row { margin-bottom: 16px; }
+        .progress-header {
+            display: flex; justify-content: space-between;
+            margin-bottom: 8px; font-size: 14px;
+        }
+        .progress-header .label { color: var(--text-dim); }
+        .progress-header .value { font-weight: 700; }
+        .progress-bar {
+            height: 10px; background: rgba(255,255,255,0.06);
+            border-radius: 5px; overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%; border-radius: 5px;
+            transition: width 1s ease;
+        }
+        .progress-data { background: linear-gradient(90deg, var(--accent), #0099cc); }
+        .progress-time { background: linear-gradient(90deg, var(--accent2), #9d4eff); }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 12px; margin-top: 16px;
+        }
+        .stat-box {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            border-radius: 12px; padding: 16px;
+            text-align: center;
+        }
+        .stat-box .icon { font-size: 24px; margin-bottom: 8px; }
+        .stat-box .num { font-size: 18px; font-weight: 700; }
+        .stat-box .desc { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+
+        /* Chart */
+        .chart-container {
+            margin-top: 16px; overflow-x: auto;
+        }
+        .chart-bars {
+            display: flex; align-items: flex-end; gap: 4px;
+            height: 120px; min-width: 400px;
+            padding-bottom: 24px; position: relative;
+        }
+        .chart-bar {
+            flex: 1; min-width: 8px;
+            background: linear-gradient(180deg, var(--accent), rgba(0,212,255,0.2));
+            border-radius: 4px 4px 0 0;
+            position: relative;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .chart-bar:hover {
+            background: linear-gradient(180deg, var(--accent2), rgba(123,47,247,0.3));
+            transform: translateY(-3px);
+        }
+        .chart-bar .tooltip {
+            position: absolute; bottom: 100%; left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-card); border: 1px solid var(--border);
+            padding: 4px 10px; border-radius: 6px;
+            font-size: 11px; white-space: nowrap;
+            opacity: 0; transition: opacity 0.2s;
+            pointer-events: none; z-index: 10;
+        }
+        .chart-bar:hover .tooltip { opacity: 1; }
+        .chart-labels {
+            display: flex; gap: 4px; margin-top: 4px;
+            min-width: 400px;
+        }
+        .chart-label {
+            flex: 1; min-width: 8px; text-align: center;
+            font-size: 9px; color: var(--text-dim);
+        }
+
+        /* Info Grid */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+        }
+        .info-item {
+            display: flex; justify-content: space-between;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+        }
+        .info-item .key { color: var(--text-dim); font-size: 13px; }
+        .info-item .val { font-weight: 600; font-size: 13px; }
+
+        /* Actions */
+        .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; }
+        .btn {
+            padding: 10px 20px; border-radius: 10px; border: none;
+            font-size: 14px; font-weight: 600; font-family: inherit;
+            cursor: pointer; transition: all 0.2s ease;
+            display: inline-flex; align-items: center; gap: 6px;
+        }
+        .btn-primary { background: linear-gradient(135deg, var(--accent), #0099cc); color: #fff; }
+        .btn-primary:hover { box-shadow: 0 4px 15px rgba(0,212,255,0.3); transform: translateY(-1px); }
+        .btn-secondary { background: rgba(255,255,255,0.08); color: var(--text); border: 1px solid var(--border); }
+        .btn-secondary:hover { border-color: var(--accent); }
+        .btn-danger { background: linear-gradient(135deg, var(--danger), #cc2255); color: #fff; }
+        .btn-danger:hover { box-shadow: 0 4px 15px rgba(255,61,113,0.3); }
+
+        /* Config Cards */
+        .config-list { display: flex; flex-direction: column; gap: 12px; }
+        .config-item {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            transition: all 0.2s ease;
+        }
+        .config-item:hover { border-color: rgba(0,212,255,0.2); }
+        .config-header {
+            display: flex; align-items: center; gap: 10px;
+            margin-bottom: 10px;
+        }
+        .config-icon { font-size: 20px; }
+        .config-name { font-weight: 700; font-size: 14px; }
+        .config-desc { font-size: 11px; color: var(--text-dim); margin-right: auto; }
+        .config-link-box {
+            display: flex; gap: 8px; align-items: stretch;
+        }
+        .config-link-input {
+            flex: 1; padding: 8px 12px;
+            background: var(--bg); border: 1px solid var(--border);
+            border-radius: 8px; color: var(--text-dim);
+            font-size: 12px; font-family: 'Courier New', monospace;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            user-select: all; cursor: text;
+        }
+        .config-copy-btn {
+            padding: 8px 14px; border-radius: 8px; border: none;
+            background: linear-gradient(135deg, var(--accent), #0099cc);
+            color: #fff; font-size: 12px; font-weight: 600;
+            font-family: inherit; cursor: pointer;
+            transition: all 0.2s ease; white-space: nowrap;
+        }
+        .config-copy-btn:hover { box-shadow: 0 2px 10px rgba(0,212,255,0.3); }
+        .config-copy-btn.copied { background: var(--success); }
+        .config-qr-btn {
+            padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border);
+            background: rgba(255,255,255,0.05); color: var(--text);
+            font-size: 12px; font-weight: 600; font-family: inherit;
+            cursor: pointer; transition: all 0.2s ease; white-space: nowrap;
+        }
+        .config-qr-btn:hover { border-color: var(--accent); }
+
+        /* QR Modal */
+        .qr-modal {
+            display: none; position: fixed; top:0; left:0; width:100%; height:100%;
+            background: rgba(0,0,0,0.8); z-index: 1100;
+            justify-content: center; align-items: center;
+        }
+        .qr-modal.show { display: flex; }
+        .qr-modal-content {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 20px; padding: 32px; text-align: center;
+            max-width: 360px; width: 90%;
+        }
+        .qr-modal-content h3 { margin-bottom: 20px; }
+        .qr-modal-content img {
+            border-radius: 12px; margin-bottom: 16px; max-width: 100%;
+        }
+        .qr-modal-content .qr-close {
+            margin-top: 8px;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none; position: fixed; top:0; left:0; width:100%; height:100%;
+            background: rgba(0,0,0,0.7); z-index: 1000;
+            justify-content: center; align-items: center;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 20px; padding: 32px;
+            width: 90%; max-width: 420px;
+        }
+        .modal h3 { margin-bottom: 20px; font-size: 18px; }
+        .modal .form-group { margin-bottom: 16px; }
+        .modal label { display: block; font-size: 13px; color: var(--text-dim); margin-bottom: 6px; }
+        .modal input {
+            width: 100%; padding: 10px 14px;
+            background: var(--bg); border: 1px solid var(--border);
+            border-radius: 8px; color: var(--text);
+            font-size: 14px; font-family: inherit;
+        }
+        .modal input:focus { outline: none; border-color: var(--accent); }
+        .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .circles-row { flex-direction: column; }
+            .circle-card { min-width: auto; }
+            .header h1 { font-size: 22px; }
+            .container { padding: 12px; }
+            .card { padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-animation"></div>
+
+    <!-- SVG Gradients -->
+    <svg width="0" height="0" style="position:absolute">
+        <defs>
+            <linearGradient id="gradData" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#00d4ff"/>
+                <stop offset="100%" stop-color="#0099cc"/>
+            </linearGradient>
+            <linearGradient id="gradTime" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#7b2ff7"/>
+                <stop offset="100%" stop-color="#9d4eff"/>
+            </linearGradient>
+        </defs>
+    </svg>
+
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🛡️ پنل مدیریت ساب‌دامنه</h1>
+            <div class="sub-url">{{ subdomain }}</div>
+            <br>
+            <div id="statusBadge" class="status-badge status-active">
+                <span class="status-dot" style="background: var(--success)"></span>
+                <span id="statusText">فعال</span>
+            </div>
+        </div>
+
+        <!-- Circular Progress Cards -->
+        <div class="card">
+            <div class="card-title">📊 مصرف کلی</div>
+            <div class="circles-row">
+                <!-- Data Circle -->
+                <div class="circle-card circle-data">
+                    <div class="circle-wrap">
+                        <svg class="circle-svg" viewBox="0 0 120 120">
+                            <circle class="circle-bg" cx="60" cy="60" r="52"/>
+                            <circle id="dataCircle" class="circle-fill" cx="60" cy="60" r="52"
+                                stroke-dasharray="326.7" stroke-dashoffset="326.7"/>
+                        </svg>
+                        <div class="circle-text">
+                            <div class="circle-value" id="dataPercent">0%</div>
+                            <div class="circle-label">حجم مصرفی</div>
+                        </div>
+                    </div>
+                    <div style="font-size: 14px;">
+                        <span id="dataUsed" style="font-weight:700;">0 GB</span>
+                        <span style="color:var(--text-dim)"> / </span>
+                        <span id="dataLimit" style="color:var(--text-dim)">10 GB</span>
+                    </div>
+                </div>
+
+                <!-- Time Circle -->
+                <div class="circle-card circle-time">
+                    <div class="circle-wrap">
+                        <svg class="circle-svg" viewBox="0 0 120 120">
+                            <circle class="circle-bg" cx="60" cy="60" r="52"/>
+                            <circle id="timeCircle" class="circle-fill" cx="60" cy="60" r="52"
+                                stroke-dasharray="326.7" stroke-dashoffset="326.7"/>
+                        </svg>
+                        <div class="circle-text">
+                            <div class="circle-value" id="timePercent">0%</div>
+                            <div class="circle-label">زمان مصرفی</div>
+                        </div>
+                    </div>
+                    <div style="font-size: 14px;">
+                        <span id="timeUsed" style="font-weight:700;">0 ساعت</span>
+                        <span style="color:var(--text-dim)"> / </span>
+                        <span id="timeLimit" style="color:var(--text-dim)">720 ساعت</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Linear Progress -->
+        <div class="card">
+            <div class="card-title">📈 جزئیات مصرف</div>
+            <div class="progress-row">
+                <div class="progress-header">
+                    <span class="label">💾 حجم مصرفی</span>
+                    <span class="value" id="dataProgressText">0% • باقی‌مانده: 10 GB</span>
+                </div>
+                <div class="progress-bar">
+                    <div id="dataProgress" class="progress-fill progress-data" style="width: 0%"></div>
+                </div>
+            </div>
+            <div class="progress-row">
+                <div class="progress-header">
+                    <span class="label">⏱️ زمان مصرفی</span>
+                    <span class="value" id="timeProgressText">0% • باقی‌مانده: 720 ساعت</span>
+                </div>
+                <div class="progress-bar">
+                    <div id="timeProgress" class="progress-fill progress-time" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Quick Stats -->
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <div class="icon">📥</div>
+                    <div class="num" id="dataRemaining">10 GB</div>
+                    <div class="desc">حجم باقی‌مانده</div>
+                </div>
+                <div class="stat-box">
+                    <div class="icon">⏳</div>
+                    <div class="num" id="timeRemaining">720 ساعت</div>
+                    <div class="desc">زمان باقی‌مانده</div>
+                </div>
+                <div class="stat-box">
+                    <div class="icon">📅</div>
+                    <div class="num" id="createdDate">—</div>
+                    <div class="desc">تاریخ ایجاد</div>
+                </div>
+                <div class="stat-box">
+                    <div class="icon">⏰</div>
+                    <div class="num" id="expireDate">—</div>
+                    <div class="desc">تاریخ انقضا</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Traffic Chart -->
+        <div class="card">
+            <div class="card-title">📉 ترافیک ساعتی</div>
+            <div class="chart-container">
+                <div class="chart-bars" id="chartBars"></div>
+                <div class="chart-labels" id="chartLabels"></div>
+            </div>
+        </div>
+
+        <!-- Info -->
+        <div class="card">
+            <div class="card-title">📋 اطلاعات ساب‌دامنه</div>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="key">🔌 پورت</span>
+                    <span class="val" id="infoPort">5000</span>
+                </div>
+                <div class="info-item">
+                    <span class="key">🟢 آخرین فعالیت</span>
+                    <span class="val" id="infoLastActive">—</span>
+                </div>
+                <div class="info-item">
+                    <span class="key">📊 کل ترافیک</span>
+                    <span class="val" id="infoTotalTraffic">0 GB</span>
+                </div>
+                <div class="info-item">
+                    <span class="key">⚡ وضعیت</span>
+                    <span class="val" id="infoStatus">فعال</span>
+                </div>
+            </div>
+
+            <div class="actions">
+                <button class="btn btn-primary" onclick="openModal()">⚙️ تنظیم محدودیت</button>
+                <button class="btn btn-secondary" onclick="refreshData()">🔄 بروزرسانی</button>
+                <button class="btn btn-danger" onclick="resetUsage()">♻️ ریست مصرف</button>
+            </div>
+        </div>
+
+        <!-- Configs Section -->
+        <div class="card">
+            <div class="card-title">🔗 کانفیگ‌های اتصال</div>
+            <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px;">
+                کانفیگ‌های زیر را کپی کرده و در کلاینت VPN خود (V2rayN، V2rayNG، Streisand، etc.) ایمپورت کنید.
+            </p>
+            <div id="configsList"></div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal">
+            <h3>⚙️ تنظیم محدودیت‌ها</h3>
+            <div class="form-group">
+                <label>حداکثر حجم (GB)</label>
+                <input type="number" id="limitData" value="10" min="1">
+            </div>
+            <div class="form-group">
+                <label>حداکثر زمان (ساعت)</label>
+                <input type="number" id="limitTime" value="720" min="1">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-primary" onclick="saveLimits()">💾 ذخیره</button>
+                <button class="btn btn-secondary" onclick="closeModal()">انصراف</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- QR Modal -->
+    <div class="qr-modal" id="qrModal">
+        <div class="qr-modal-content">
+            <h3 id="qrTitle">QR Code</h3>
+            <img id="qrImage" src="" alt="QR Code">
+            <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">
+                QR را با دوربین کلاینت VPN خود اسکن کنید
+            </div>
+            <button class="btn btn-secondary qr-close" onclick="closeQR()">بستن</button>
+        </div>
+    </div>
+
+    <script>
+    const SUBDOMAIN = '{{ subdomain }}';
+    const CIRCUMFERENCE = 326.7; // 2 * PI * 52
+
+    function formatBytes(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    function formatTime(seconds) {
+        if (seconds <= 0) return 'منقضی';
+        const d = Math.floor(seconds / 86400);
+        const h = Math.floor((seconds % 86400) / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        if (d > 0) return d + ' روز و ' + h + ' ساعت';
+        if (h > 0) return h + ' ساعت و ' + m + ' دقیقه';
+        return m + ' دقیقه';
+    }
+
+    function formatTimeShort(seconds) {
+        const h = Math.floor(seconds / 3600);
+        if (h >= 720) return Math.floor(h/720) + ' ماه';
+        if (h >= 24) return Math.floor(h/24) + ' روز';
+        return h + ' ساعت';
+    }
+
+    function formatDate(iso) {
+        if (!iso) return '—';
+        const d = new Date(iso);
+        return d.toLocaleDateString('fa-IR') + ' ' + d.toLocaleTimeString('fa-IR', {hour:'2-digit',minute:'2-digit'});
+    }
+
+    async function loadData() {
+        try {
+            const res = await fetch('/api/traffic/' + encodeURIComponent(SUBDOMAIN));
+            const data = await res.json();
+            if (!data.ok) return;
+            const s = data.status;
+
+            // Status badge
+            const badge = document.getElementById('statusBadge');
+            const statusText = document.getElementById('statusText');
+            const dot = badge.querySelector('.status-dot');
+            badge.className = 'status-badge';
+            if (s.status === 'active') {
+                badge.classList.add('status-active');
+                dot.style.background = 'var(--success)';
+                statusText.textContent = '✅ فعال';
+            } else if (s.status === 'expired') {
+                badge.classList.add('status-expired');
+                dot.style.background = 'var(--danger)';
+                statusText.textContent = '⛔ منقضی';
+            } else {
+                badge.classList.add('status-exceeded');
+                dot.style.background = 'var(--warning)';
+                statusText.textContent = '⚠️ حجم تمام شده';
+            }
+
+            // Data circle
+            const dataOffset = CIRCUMFERENCE - (s.data_percent / 100) * CIRCUMFERENCE;
+            document.getElementById('dataCircle').style.strokeDashoffset = dataOffset;
+            document.getElementById('dataPercent').textContent = s.data_percent + '%';
+            document.getElementById('dataUsed').textContent = formatBytes(s.data_used_bytes);
+            document.getElementById('dataLimit').textContent = formatBytes(s.data_limit_bytes);
+
+            // Time circle
+            const timeOffset = CIRCUMFERENCE - (s.time_percent / 100) * CIRCUMFERENCE;
+            document.getElementById('timeCircle').style.strokeDashoffset = timeOffset;
+            document.getElementById('timePercent').textContent = s.time_percent + '%';
+            document.getElementById('timeUsed').textContent = formatTimeShort(s.time_used_seconds);
+            document.getElementById('timeLimit').textContent = formatTimeShort(s.time_limit_seconds);
+
+            // Linear progress
+            document.getElementById('dataProgress').style.width = s.data_percent + '%';
+            document.getElementById('dataProgressText').textContent =
+                s.data_percent + '% • باقی‌مانده: ' + formatBytes(s.data_remaining_bytes);
+            document.getElementById('timeProgress').style.width = s.time_percent + '%';
+            document.getElementById('timeProgressText').textContent =
+                s.time_percent + '% • باقی‌مانده: ' + formatTime(s.time_remaining_seconds);
+
+            // Stats
+            document.getElementById('dataRemaining').textContent = formatBytes(s.data_remaining_bytes);
+            document.getElementById('timeRemaining').textContent = formatTime(s.time_remaining_seconds);
+            document.getElementById('createdDate').textContent = formatDate(s.created_at);
+            document.getElementById('expireDate').textContent = formatDate(s.expires_at);
+
+            // Info
+            document.getElementById('infoPort').textContent = s.port;
+            document.getElementById('infoLastActive').textContent = formatDate(s.last_active);
+            document.getElementById('infoTotalTraffic').textContent = formatBytes(s.data_used_bytes);
+            document.getElementById('infoStatus').textContent =
+                s.status === 'active' ? 'فعال ✅' :
+                s.status === 'expired' ? 'منقضی ⛔' : 'حجم تمام ⚠️';
+
+            // Chart
+            renderChart(s.history || []);
+
+            // Update modal defaults
+            document.getElementById('limitData').value = Math.round(s.data_limit_bytes / 1073741824);
+            document.getElementById('limitTime').value = Math.round(s.time_limit_seconds / 3600);
+
+        } catch(e) {
+            console.error('Error loading data:', e);
+        }
+    }
+
+    function renderChart(history) {
+        const bars = document.getElementById('chartBars');
+        const labels = document.getElementById('chartLabels');
+        bars.innerHTML = '';
+        labels.innerHTML = '';
+
+        if (!history || history.length === 0) {
+            bars.innerHTML = '<div style="text-align:center;color:var(--text-dim);width:100%;padding-top:40px;">داده‌ای برای نمایش وجود ندارد</div>';
+            return;
+        }
+
+        // Show last 24 entries
+        const data = history.slice(-24);
+        const maxBytes = Math.max(...data.map(d => d.bytes), 1);
+
+        data.forEach(d => {
+            const height = Math.max(2, (d.bytes / maxBytes) * 100);
+            const bar = document.createElement('div');
+            bar.className = 'chart-bar';
+            bar.style.height = height + '%';
+            bar.innerHTML = '<div class="tooltip">' + formatBytes(d.bytes) + '</div>';
+            bars.appendChild(bar);
+
+            const label = document.createElement('div');
+            label.className = 'chart-label';
+            const time = d.time.split(' ')[1] || '';
+            label.textContent = time;
+            labels.appendChild(label);
+        });
+    }
+
+    function openModal() {
+        document.getElementById('modalOverlay').classList.add('show');
+    }
+
+    function closeModal() {
+        document.getElementById('modalOverlay').classList.remove('show');
+    }
+
+    async function saveLimits() {
+        const dataLimit = document.getElementById('limitData').value;
+        const timeLimit = document.getElementById('limitTime').value;
+
+        const res = await fetch('/api/traffic/' + encodeURIComponent(SUBDOMAIN) + '/limits', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({data_limit_gb: parseFloat(dataLimit), time_limit_hours: parseFloat(timeLimit)})
+        });
+        const data = await res.json();
+        if (data.ok) {
+            alert('محدودیت‌ها بروزرسانی شد ✅');
+            closeModal();
+            loadData();
+        } else {
+            alert('خطا: ' + (data.error || ''));
+        }
+    }
+
+    async function resetUsage() {
+        if (!confirm('آیا از ریست مصرف مطمئن هستید؟')) return;
+        const res = await fetch('/api/traffic/' + encodeURIComponent(SUBDOMAIN) + '/reset', {
+            method: 'POST'
+        });
+        const data = await res.json();
+        if (data.ok) {
+            alert('مصرف ریست شد ✅');
+            loadData();
+        }
+    }
+
+    function refreshData() {
+        loadData();
+    }
+
+    // Auto refresh every 10 seconds
+    loadData();
+    loadConfigs();
+    setInterval(loadData, 10000);
+
+    async function loadConfigs() {
+        try {
+            const res = await fetch('/api/traffic/' + encodeURIComponent(SUBDOMAIN) + '/configs');
+            const data = await res.json();
+            if (!data.ok) return;
+
+            const list = document.getElementById('configsList');
+            list.innerHTML = '<div class="config-list">' + data.configs.map(c => `
+                <div class="config-item">
+                    <div class="config-header">
+                        <span class="config-icon">${c.icon}</span>
+                        <span class="config-name">${c.name}</span>
+                        <span class="config-desc">${c.desc}</span>
+                    </div>
+                    <div class="config-link-box">
+                        <input class="config-link-input" id="cfg-${c.type}" value="${c.link}" readonly onclick="this.select()">
+                        <button class="config-copy-btn" onclick="copyConfig('${c.type}', this)">📋 کپی</button>
+                        <button class="config-qr-btn" onclick="showQR('${c.type}', '${c.name}', \`${c.link}\`)">📷 QR</button>
+                    </div>
+                </div>
+            `).join('') + '</div>';
+        } catch(e) {
+            console.error('Error loading configs:', e);
+        }
+    }
+
+    function copyConfig(type, btn) {
+        const input = document.getElementById('cfg-' + type);
+        input.select();
+        navigator.clipboard.writeText(input.value).then(() => {
+            btn.textContent = '✅ کپی شد';
+            btn.classList.add('copied');
+            setTimeout(() => {
+                btn.textContent = '📋 کپی';
+                btn.classList.remove('copied');
+            }, 2000);
+        }).catch(() => {
+            document.execCommand('copy');
+            btn.textContent = '✅ کپی شد';
+            btn.classList.add('copied');
+            setTimeout(() => {
+                btn.textContent = '📋 کپی';
+                btn.classList.remove('copied');
+            }, 2000);
+        });
+    }
+
+    function showQR(type, name, link) {
+        document.getElementById('qrTitle').textContent = name + ' - QR Code';
+        const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(link);
+        document.getElementById('qrImage').src = qrUrl;
+        document.getElementById('qrModal').classList.add('show');
+    }
+
+    function closeQR() {
+        document.getElementById('qrModal').classList.remove('show');
+    }
+    </script>
+</body>
+</html>
