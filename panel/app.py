@@ -493,16 +493,18 @@ def bot_webhook():
 
 @app.route("/api/domain/add", methods=["POST"])
 def api_domain_add():
-    """افزودن دامنه + کانفیگ خودکار Nginx"""
+    """افزودن دامنه + کانفیگ خودکار Nginx + SSL خودکار"""
     data = request.json or {}
     domain = data.get("domain", "").strip()
     domain_type = data.get("type", "panel")  # panel, config, sub_link
     target_port = data.get("port", 5000)
+    email = data.get("email", "").strip()
+    auto_ssl = data.get("auto_ssl", True)
     
     if not domain:
         return jsonify({"ok": False, "error": "دامنه الزامی است"})
     
-    # Nginx config
+    # Nginx config (HTTP first, SSL will be added by certbot)
     nginx_conf = f"""server {{
     listen 80;
     server_name {domain};
@@ -519,6 +521,22 @@ def api_domain_add():
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
+    }}
+    
+    location /panel/ {{
+        proxy_pass http://127.0.0.1:{target_port};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }}
+    
+    location /sub/ {{
+        proxy_pass http://127.0.0.1:{target_port};
+        proxy_set_header Host $host;
+    }}
+    
+    location /bot/webhook {{
+        proxy_pass http://127.0.0.1:{target_port};
+        proxy_set_header Host $host;
     }}
     
     # Security headers
@@ -544,13 +562,26 @@ def api_domain_add():
     
     ok, msg = run_cmd("nginx -t && systemctl reload nginx")
     
+    ssl_result = {"enabled": False, "message": ""}
+    
+    if ok and auto_ssl:
+        # Auto SSL with certbot
+        ssl_email = email or "admin@" + domain
+        ssl_cmd = f"certbot --nginx -d {domain} -d www.{domain} -m {ssl_email} --agree-tos --no-eff-email --non-interactive --redirect 2>&1"
+        ssl_ok, ssl_msg = run_cmd(ssl_cmd)
+        
+        if ssl_ok:
+            ssl_result = {"enabled": True, "message": f"SSL برای {domain} فعال شد ✅"}
+        else:
+            ssl_result = {"enabled": False, "message": f"SSL دریافت نشد. DNS را بررسی کنید. {ssl_msg[:200]}"}
+    
     if ok:
         # Save to domain config
         cfg = load_domain_config()
         if "domains" not in cfg:
             cfg["domains"] = []
         cfg["domains"] = [d for d in cfg["domains"] if d.get("name") != domain]
-        cfg["domains"].append({"name": domain, "type": domain_type, "port": target_port})
+        cfg["domains"].append({"name": domain, "type": domain_type, "port": target_port, "ssl": ssl_result["enabled"]})
         
         if domain_type == "sub_link":
             cfg["sub_link_domain"] = domain
@@ -561,7 +592,11 @@ def api_domain_add():
         
         save_domain_config(cfg)
     
-    return jsonify({"ok": ok, "message": f"دامنه {domain} اضافه شد و Nginx کانفیگ شد"})
+    return jsonify({
+        "ok": ok,
+        "message": f"دامنه {domain} اضافه شد و Nginx کانفیگ شد",
+        "ssl": ssl_result
+    })
 
 @app.route("/api/domain/remove", methods=["POST"])
 def api_domain_remove():

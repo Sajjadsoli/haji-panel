@@ -271,7 +271,7 @@ add_domain_nginx() {
         return
     fi
     
-    # Create Nginx config
+    # Create Nginx config (HTTP first)
     cat > "/etc/nginx/sites-available/$domain" << NGINXEOF
 server {
     listen 80;
@@ -322,12 +322,37 @@ import json
 cfg = json.load(open('config/domain.json')) if __import__('os').path.exists('config/domain.json') else {}
 if 'domains' not in cfg: cfg['domains'] = []
 cfg['domains'] = [d for d in cfg['domains'] if d.get('name') != '$domain']
-cfg['domains'].append({'name': '$domain', 'type': '$dtype', 'port': $port})
+cfg['domains'].append({'name': '$domain', 'type': '$dtype', 'port': $port, 'ssl': False})
 cfg['${dtype}_domain'] = '$domain'
 json.dump(cfg, open('config/domain.json','w'), indent=2, ensure_ascii=False)
 "
     
     echo -e "${GREEN}Domain $domain added + Nginx configured ✅${NC}"
+    
+    # Auto SSL
+    read -p "  Auto SSL with Let's Encrypt? (y/n): " ssl_choice
+    if [[ "$ssl_choice" == "y" || "$ssl_choice" == "Y" ]]; then
+        read -p "  Email for SSL: " ssl_email
+        echo -e "${CYAN}Requesting SSL certificate...${NC}"
+        certbot --nginx -d "$domain" -d "www.$domain" -m "$ssl_email" --agree-tos --no-eff-email --non-interactive --redirect
+        
+        if [[ $? -eq 0 ]]; then
+            echo -e "${GREEN}SSL activated for $domain ✅${NC}"
+            # Update config
+            cd $INSTALL_DIR && python3 -c "
+import json, os
+p = 'config/domain.json'
+if os.path.exists(p):
+    cfg = json.load(open(p))
+    for d in cfg.get('domains', []):
+        if d.get('name') == '$domain':
+            d['ssl'] = True
+    json.dump(cfg, open(p,'w'), indent=2, ensure_ascii=False)
+"
+        else
+            echo -e "${YELLOW}SSL failed. Check DNS points to this server.${NC}"
+        fi
+    fi
 }
 
 remove_domain_nginx() {
