@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}فایروال - Haji Panel{% endblock %}
+{% block page_title %}🔥 فایروال{% endblock %}
+
+{% block content %}
+<div class="section">
+    <h2 class="section-title">🔥 مدیریت فایروال (UFW)</h2>
+    
+    <div class="form-card">
+        <div class="form-row">
+            <div class="form-group">
+                <label>پورت</label>
+                <input type="number" id="fwPort" placeholder="8080">
+            </div>
+            <div class="form-group">
+                <label>پروتکل</label>
+                <select id="fwProto">
+                    <option value="tcp">TCP</option>
+                    <option value="udp">UDP</option>
+                </select>
+            </div>
+        </div>
+        <div class="btn-group">
+            <button class="btn-primary" onclick="fwAction('allow')">✅ باز کردن پورت</button>
+            <button class="btn-danger" onclick="fwAction('deny')">🚫 بستن پورت</button>
+            <button class="btn-secondary" onclick="fwReload()">🔄 بارگذاری مجدد</button>
+        </div>
+    </div>
+</div>
+
+<div class="section">
+    <h2 class="section-title">📋 قوانین فعلی</h2>
+    <div class="log-box">
+        <pre>{{ rules }}</pre>
+    </div>
+</div>
+
+<script>
+async function fwAction(action) {
+    const port = document.getElementById('fwPort').value;
+    const proto = document.getElementById('fwProto').value;
+    if (!port) { alert('پورت را وارد کنید'); return; }
+    
+    const res = await fetch('/api/firewall', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({action, port, proto})
+    });
+    const data = await res.json();
+    alert(data.ok ? 'انجام شد ✅' : 'خطا: ' + data.message);
+    location.reload();
+}
+
+async function fwReload() {
+    const res = await fetch('/api/firewall', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({action: 'reload'})
+    });
+    const data = await res.json();
+    alert(data.ok ? 'بارگذاری مجدد شد ✅' : 'خطا');
+    location.reload();
+}
+</script>
+{% endblock %}

@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}داشبورد - Haji Panel{% endblock %}
+{% block page_title %}📊 داشبورد{% endblock %}
+
+{% block content %}
+<!-- Stats Cards -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon cpu-icon">🖥️</div>
+        <div class="stat-info">
+            <span class="stat-label">پردازنده</span>
+            <span class="stat-value" id="cpuValue">{{ cpu|round(1) }}%</span>
+            <div class="stat-bar"><div class="stat-bar-fill" style="width: {{ cpu }}%"></div></div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon ram-icon">💾</div>
+        <div class="stat-info">
+            <span class="stat-label">حافظه RAM</span>
+            <span class="stat-value">{{ ram_percent|round(1) }}%</span>
+            <div class="stat-bar"><div class="stat-bar-fill" style="width: {{ ram_percent }}%"></div></div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon disk-icon">📀</div>
+        <div class="stat-info">
+            <span class="stat-label">دیسک</span>
+            <span class="stat-value">{{ disk_percent|round(1) }}%</span>
+            <div class="stat-bar"><div class="stat-bar-fill" style="width: {{ disk_percent }}%"></div></div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon net-icon">📡</div>
+        <div class="stat-info">
+            <span class="stat-label">شبکه</span>
+            <span class="stat-value" id="netValue">—</span>
+        </div>
+    </div>
+</div>
+
+<!-- Anti-Filter Status -->
+<div class="section">
+    <h2 class="section-title">🛡️ وضعیت ضد‌فیلتر</h2>
+    <div class="status-grid">
+        <div class="status-card {{ 'status-ok' if warp_status == 'connected' else 'status-warn' if warp_status == 'disconnected' else 'status-err' }}">
+            <div class="status-card-icon">☁️</div>
+            <div class="status-card-info">
+                <span class="status-card-label">Cloudflare Warp</span>
+                <span class="status-card-value">
+                    {% if warp_status == 'connected' %}متصل ✅
+                    {% elif warp_status == 'disconnected' %}قطع ⚠️
+                    {% else %}نصب نیست ❌{% endif %}
+                </span>
+            </div>
+        </div>
+
+        <div class="status-card {{ 'status-ok' if doh_status else 'status-warn' }}">
+            <div class="status-card-icon">🌐</div>
+            <div class="status-card-info">
+                <span class="status-card-label">DNS over HTTPS</span>
+                <span class="status-card-value">{{ 'فعال ✅' if doh_status else 'غیرفعال ⚠️' }}</span>
+            </div>
+        </div>
+
+        <div class="status-card {{ 'status-ok' if ssl_enabled else 'status-warn' }}">
+            <div class="status-card-icon">🔒</div>
+            <div class="status-card-info">
+                <span class="status-card-label">SSL / HTTPS</span>
+                <span class="status-card-value">{{ 'فعال ✅' if ssl_enabled else 'غیرفعال ⚠️' }}</span>
+            </div>
+        </div>
+
+        <div class="status-card {{ 'status-ok' if domain else 'status-warn' }}">
+            <div class="status-card-icon">🔗</div>
+            <div class="status-card-info">
+                <span class="status-card-label">دامنه</span>
+                <span class="status-card-value">{{ domain if domain else 'تنظیم نشده' }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="section">
+    <h2 class="section-title">⚡ دسترسی سریع</h2>
+    <div class="quick-actions">
+        <a href="/anti-filter" class="quick-action-btn">
+            <span class="qa-icon">🛡️</span>
+            <span>مدیریت ضد‌فیلتر</span>
+        </a>
+        <a href="/domains" class="quick-action-btn">
+            <span class="qa-icon">🌐</span>
+            <span>افزودن دامنه</span>
+        </a>
+        <a href="/ssl" class="quick-action-btn">
+            <span class="qa-icon">🔒</span>
+            <span>فعال‌سازی SSL</span>
+        </a>
+        <a href="/firewall" class="quick-action-btn">
+            <span class="qa-icon">🔥</span>
+            <span>فایروال</span>
+        </a>
+    </div>
+</div>
+
+<!-- Server Info -->
+<div class="section">
+    <h2 class="section-title">📋 اطلاعات سرور</h2>
+    <div class="info-table">
+        <div class="info-row">
+            <span class="info-label">زمان سرور</span>
+            <span class="info-value">{{ uptime }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">RAM کل</span>
+            <span class="info-value">{{ (ram_total / 1073741824)|round(2) }} GB</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">RAM استفاده شده</span>
+            <span class="info-value">{{ (ram_used / 1073741824)|round(2) }} GB</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">دیسک کل</span>
+            <span class="info-value">{{ (disk_total / 1073741824)|round(2) }} GB</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">دیسک استفاده شده</span>
+            <span class="info-value">{{ (disk_used / 1073741824)|round(2) }} GB</span>
+        </div>
+    </div>
+</div>
+
+<script>
+// Auto-refresh stats
+async function refreshStats() {
+    try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        document.getElementById('cpuValue').textContent = data.cpu.toFixed(1) + '%';
+    } catch(e) {}
+}
+setInterval(refreshStats, 5000);
+</script>
+{% endblock %}

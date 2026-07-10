@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}ضد‌فیلتر - Haji Panel{% endblock %}
+{% block page_title %}🛡️ ضد‌فیلتر{% endblock %}
+
+{% block content %}
+<!-- Warp Status -->
+<div class="section">
+    <h2 class="section-title">☁️ Cloudflare Warp</h2>
+    <div class="status-card-large {{ 'status-ok' if warp_status == 'connected' else 'status-warn' if warp_status == 'disconnected' else 'status-err' }}">
+        <div class="sc-large-icon">☁️</div>
+        <div class="sc-large-info">
+            <span class="sc-large-label">وضعیت Warp</span>
+            <span class="sc-large-value">
+                {% if warp_status == 'connected' %}متصل و فعال ✅
+                {% elif warp_status == 'disconnected' %}قطع ⚠️
+                {% else %}نصب نیست ❌{% endif %}
+            </span>
+            <span class="sc-large-detail">{{ warp_detail }}</span>
+        </div>
+        <div class="sc-large-actions">
+            {% if warp_status != 'not_installed' %}
+            <button class="btn-primary" onclick="warpAction('enable')" {{ 'disabled' if warp_status == 'connected' }}>فعال‌سازی</button>
+            <button class="btn-danger" onclick="warpAction('disable')" {{ 'disabled' if warp_status == 'disconnected' }}>غیرفعال</button>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- DoH Status -->
+<div class="section">
+    <h2 class="section-title">🌐 DNS over HTTPS (DoH)</h2>
+    <div class="status-card-large {{ 'status-ok' if doh_status else 'status-warn' }}">
+        <div class="sc-large-icon">🌐</div>
+        <div class="sc-large-info">
+            <span class="sc-large-label">وضعیت DoH</span>
+            <span class="sc-large-value">{{ 'فعال ✅' if doh_status else 'غیرفعال ⚠️' }}</span>
+            <span class="sc-large-detail">Cloudflare DNS (1.1.1.1) + Google DNS (8.8.8.8)</span>
+        </div>
+        <div class="sc-large-actions">
+            <button class="btn-primary" onclick="dohAction('enable')" {{ 'disabled' if doh_status }}>فعال‌سازی</button>
+            <button class="btn-danger" onclick="dohAction('disable')" {{ 'disabled' if not doh_status }}>غیرفعال</button>
+        </div>
+    </div>
+</div>
+
+<!-- Anti-Filter Layers -->
+<div class="section">
+    <h2 class="section-title">🧅 لایه‌های ضد‌فیلتر</h2>
+    <div class="layers-grid">
+        <div class="layer-card">
+            <div class="layer-icon">🛡️</div>
+            <h3>لایه ۱: Warp</h3>
+            <p>ترافیک سرور از طریق Cloudflare Warp عبور می‌کند. IP سرور مخفی می‌ماند.</p>
+        </div>
+        <div class="layer-card">
+            <div class="layer-icon">🌐</div>
+            <h3>لایه ۲: DoH</h3>
+            <p>DNS over HTTPS فیلتر DNS را دور می‌زند و از هدایت DNS جلوگیری می‌کند.</p>
+        </div>
+        <div class="layer-card">
+            <div class="layer-icon">☁️</div>
+            <h3>لایه ۳: CDN</h3>
+            <p>دامنه از طریق Cloudflare CDN عبور می‌کند → ضد‌فیلتر دامنه.</p>
+        </div>
+        <div class="layer-card">
+            <div class="layer-icon">🔒</div>
+            <h3>لایه ۴: SSL</h3>
+            <p>ترافیک رمزنگاری شده. فیلتر محتوا دشوارتر می‌شود.</p>
+        </div>
+    </div>
+</div>
+
+<!-- Anti-Filter Status Check -->
+<div class="section">
+    <h2 class="section-title">🔍 تست وضعیت</h2>
+    <button class="btn-primary" onclick="checkStatus()">🔍 بررسی وضعیت ضد‌فیلتر</button>
+    <div id="statusResult" class="status-result" style="margin-top: 16px;"></div>
+</div>
+
+<script>
+async function warpAction(action) {
+    const res = await fetch('/api/warp/' + action);
+    const data = await res.json();
+    alert(data.ok ? 'عملیات موفق ✅' : 'خطا: ' + data.message);
+    location.reload();
+}
+
+async function dohAction(action) {
+    const res = await fetch('/api/doh/' + action);
+    const data = await res.json();
+    alert(data.ok ? 'عملیات موفق ✅' : 'خطا: ' + data.message);
+    location.reload();
+}
+
+async function checkStatus() {
+    document.getElementById('statusResult').innerHTML = '<p>در حال بررسی...</p>';
+    const res = await fetch('/api/status');
+    const data = await res.json();
+    
+    document.getElementById('statusResult').innerHTML = `
+        <div class="info-table">
+            <div class="info-row"><span class="info-label">Warp</span><span class="info-value">${data.warp}</span></div>
+            <div class="info-row"><span class="info-label">DoH</span><span class="info-value">${data.doh ? 'فعال' : 'غیرفعال'}</span></div>
+            <div class="info-row"><span class="info-label">CPU</span><span class="info-value">${data.cpu.toFixed(1)}%</span></div>
+            <div class="info-row"><span class="info-label">RAM</span><span class="info-value">${data.ram_percent.toFixed(1)}%</span></div>
+        </div>
+    `;
+}
+</script>
+{% endblock %}

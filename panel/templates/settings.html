@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}تنظیمات - Haji Panel{% endblock %}
+{% block page_title %}⚙️ تنظیمات{% endblock %}
+
+{% block content %}
+<div class="section">
+    <h2 class="section-title">⚙️ تنظیمات Nginx</h2>
+    <div class="btn-group">
+        <button class="btn-primary" onclick="nginxAction('reload')">🔄 Reload</button>
+        <button class="btn-secondary" onclick="nginxAction('restart')">🔁 Restart</button>
+        <button class="btn-secondary" onclick="nginxAction('test')">✅ تست کانفیگ</button>
+        <button class="btn-secondary" onclick="nginxAction('status')">📊 وضعیت</button>
+    </div>
+    <div id="nginxResult" class="status-result" style="margin-top: 16px;"></div>
+</div>
+
+<div class="section">
+    <h2 class="section-title">📜 لاگ‌ها</h2>
+    <div class="form-card">
+        <div class="form-row">
+            <div class="form-group">
+                <label>نوع لاگ</label>
+                <select id="logType">
+                    <option value="nginx_access">Nginx Access</option>
+                    <option value="nginx_error">Nginx Error</option>
+                    <option value="haji">سیستم</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>تعداد خطوط</label>
+                <input type="number" id="logLines" value="50">
+            </div>
+        </div>
+        <button class="btn-primary" onclick="loadLogs()">📜 نمایش لاگ</button>
+    </div>
+    <div id="logResult" class="log-box" style="margin-top: 16px;"></div>
+</div>
+
+<div class="section">
+    <h2 class="section-title">📦 پیکربندی</h2>
+    <div class="info-table">
+        <div class="info-row">
+            <span class="info-label">پورت پنل</span>
+            <span class="info-value">{{ config.get('panel_port', 5000) }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">پورت Nginx</span>
+            <span class="info-value">{{ config.get('nginx_port', 80) }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">پورت SSL</span>
+            <span class="info-value">{{ config.get('ssl_port', 443) }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Warp</span>
+            <span class="info-value">{{ 'فعال' if config.get('warp_enabled') else 'غیرفعال' }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">DoH</span>
+            <span class="info-value">{{ 'فعال' if config.get('doh_enabled') else 'غیرفعال' }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">فایروال</span>
+            <span class="info-value">{{ 'فعال' if config.get('firewall_enabled') else 'غیرفعال' }}</span>
+        </div>
+    </div>
+</div>
+
+<div class="section">
+    <h2 class="section-title">ℹ️ درباره Haji Panel</h2>
+    <div class="guide-card">
+        <p><strong>Haji Panel v1.0.0</strong></p>
+        <p>پنل مدیریت سرور ضد‌فیلتر</p>
+        <p>GitHub: <a href="https://github.com/Sajjadsoli/haji-panel" target="_blank">github.com/Sajjadsoli/haji-panel</a></p>
+        <p>لایسنس: MIT</p>
+    </div>
+</div>
+
+<script>
+async function nginxAction(action) {
+    document.getElementById('nginxResult').innerHTML = '<p>در حال اجرا...</p>';
+    const res = await fetch('/api/nginx/' + action);
+    const data = await res.json();
+    document.getElementById('nginxResult').innerHTML = 
+        `<div class="log-box"><pre>${data.ok ? data.message : 'خطا: ' + data.message}</pre></div>`;
+}
+
+async function loadLogs() {
+    const type = document.getElementById('logType').value;
+    const lines = document.getElementById('logLines').value;
+    document.getElementById('logResult').innerHTML = '<p>در حال بارگذاری...</p>';
+    const res = await fetch(`/api/logs?type=${type}&lines=${lines}`);
+    const data = await res.json();
+    document.getElementById('logResult').innerHTML = `<pre>${data.logs || 'لاگی یافت نشد'}</pre>`;
+}
+</script>
+{% endblock %}

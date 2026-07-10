@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}دامنه‌ها - Haji Panel{% endblock %}
+{% block page_title %}🌐 مدیریت دامنه{% endblock %}
+
+{% block content %}
+<div class="section">
+    <h2 class="section-title">➕ افزودن دامنه جدید</h2>
+    <form class="form-card" id="domainForm">
+        <div class="form-group">
+            <label>نام دامنه</label>
+            <input type="text" id="domainName" placeholder="example.com" required>
+        </div>
+        <div class="form-group">
+            <label>ایمیل (برای SSL)</label>
+            <input type="email" id="domainEmail" placeholder="you@example.com">
+        </div>
+        <button type="submit" class="btn-primary">افزودن دامنه</button>
+    </form>
+</div>
+
+{% if domain_cfg and domain_cfg.domain %}
+<div class="section">
+    <h2 class="section-title">📋 دامنه فعلی</h2>
+    <div class="info-table">
+        <div class="info-row">
+            <span class="info-label">دامنه</span>
+            <span class="info-value">{{ domain_cfg.domain }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">ایمیل</span>
+            <span class="info-value">{{ domain_cfg.email or '—' }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">SSL</span>
+            <span class="info-value">{{ 'فعال ✅' if domain_cfg.ssl_enabled else 'غیرفعال ⚠️' }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Cloudflare Proxy</span>
+            <span class="info-value">{{ 'فعال' if domain_cfg.cloudflare_proxy else 'غیرفعال' }}</span>
+        </div>
+    </div>
+    <div class="domain-actions" style="margin-top: 16px;">
+        <a href="/ssl" class="btn-primary">🔒 دریافت SSL</a>
+    </div>
+</div>
+{% endif %}
+
+<!-- Subdomains Section -->
+<div class="section">
+    <h2 class="section-title">🔀 افزودن ساب‌دامنه</h2>
+    <form class="form-card" id="subdomainForm">
+        <div class="form-row">
+            <div class="form-group" style="flex: 2;">
+                <label>نام ساب‌دامنه</label>
+                <input type="text" id="subdomainName" placeholder="app.example.com" required>
+            </div>
+            <div class="form-group" style="flex: 1;">
+                <label>پورت مقصد</label>
+                <input type="number" id="subdomainPort" value="5000" min="1" max="65535">
+            </div>
+        </div>
+        <button type="submit" class="btn-primary">➕ افزودن ساب‌دامنه</button>
+        <p style="font-size:12px;color:var(--text-dim);margin-top:8px;">
+            💡 هر ساب‌دامنه پنل گرافیکی مدیریت با نمایش حجم و زمان مصرفی دریافت می‌کند.<br>
+            دسترسی پنل: <code>http://ساب‌دامنه/panel</code>
+        </p>
+    </form>
+</div>
+
+{% if subdomains and subdomains|length > 0 %}
+<div class="section">
+    <h2 class="section-title">📋 ساب‌دامنه‌های فعال</h2>
+    <div class="info-table">
+        {% for sub in subdomains %}
+        <div class="info-row">
+            <span class="info-label">🔗 {{ sub.name }}</span>
+            <span class="info-value">پورت {{ sub.port }} {{ '• SSL ✅' if sub.ssl else '• SSL ⚠️' }}</span>
+            <button class="btn-danger btn-sm" onclick="deleteSubdomain('{{ sub.name }}')" style="padding: 4px 12px; font-size: 12px;">حذف</button>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<div class="section">
+    <h2 class="section-title">📖 راهنمای ضد‌فیلتر دامنه</h2>
+    <div class="guide-card">
+        <h3>مراحل ضد‌فیلتر دامنه:</h3>
+        <ol>
+            <li>دامنه خود را در فرم بالا وارد کنید</li>
+            <li>DNS دامنه را در پنل دامنه به IP سرور تنظیم کنید</li>
+            <li>اگر از Cloudflare استفاده می‌کنید، پروکسی (Orange Cloud ☁️) را فعال کنید</li>
+            <li>از بخش SSL، گواهی رایگان Let's Encrypt دریافت کنید</li>
+            <li>ترافیک دامنه از طریق Cloudflare CDN عبور می‌کند → ضد‌فیلتر ✅</li>
+        </ol>
+    </div>
+</div>
+
+<script>
+document.getElementById('domainForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const domain = document.getElementById('domainName').value;
+    const email = document.getElementById('domainEmail').value;
+    
+    const res = await fetch('/api/domain', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({domain, email})
+    });
+    const data = await res.json();
+    
+    if (data.ok) {
+        alert('دامنه با موفقیت اضافه شد!');
+        location.reload();
+    } else {
+        alert('خطا: ' + (data.error || data.message));
+    }
+});
+
+document.getElementById('subdomainForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const subdomain = document.getElementById('subdomainName').value;
+    const port = document.getElementById('subdomainPort').value || 5000;
+    
+    const res = await fetch('/api/subdomain', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({subdomain, port: parseInt(port)})
+    });
+    const data = await res.json();
+    
+    if (data.ok) {
+        alert('ساب‌دامنه با موفقیت اضافه شد!');
+        location.reload();
+    } else {
+        alert('خطا: ' + (data.error || data.message));
+    }
+});
+
+async function deleteSubdomain(name) {
+    if (!confirm('حذف ساب‌دامنه ' + name + '؟')) return;
+    
+    const res = await fetch('/api/subdomain/delete', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({subdomain: name})
+    });
+    const data = await res.json();
+    
+    if (data.ok) {
+        alert('ساب‌دامنه حذف شد');
+        location.reload();
+    } else {
+        alert('خطا: ' + (data.error || data.message));
+    }
+}
+</script>
+{% endblock %}
