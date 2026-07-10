@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ورود - Haji Panel</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body class="login-body">
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-logo">
+                <span class="logo-icon-big">🛡️</span>
+                <h1>Haji Panel</h1>
+                <p>پنل مدیریت سرور ضد‌فیلتر</p>
+            </div>
+            <form method="POST" action="/login" class="login-form">
+                {% if error %}
+                <div class="login-error">{{ error }}</div>
+                {% endif %}
+                <div class="form-group">
+                    <label>رمز عبور</label>
+                    <input type="password" name="password" placeholder="••••••••••••" autofocus required>
+                </div>
+                <button type="submit" class="login-btn">ورود →</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
