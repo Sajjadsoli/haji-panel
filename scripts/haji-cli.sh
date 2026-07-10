@@ -40,6 +40,10 @@ show_usage() {
     echo "  │  haji firewall     - Firewall Management                         │"
     echo "  │  haji bbr          - Enable BBR                                  │"
     echo "  │  haji speedtest    - Speedtest by Ookla                          │"
+    echo "  │  haji password     - Change Panel Password                       │"
+    echo "  │  haji domain       - Domain Management                           │"
+    echo "  │  haji sub-domain   - Sub-link Domain Management                  │"
+    echo "  │  haji security     - Security Settings                           │"
     echo "  └──────────────────────────────────────────────────────────────────┘"
     echo -e "${NC}"
 }
@@ -217,6 +221,195 @@ speedtest() {
     speedtest
 }
 
+# ─── Password Management ───────────────────────────────────
+
+change_password() {
+    echo -e "${CYAN}Change Panel Password${NC}"
+    read -s -p "  New password: " pass1; echo ""
+    read -s -p "  Confirm password: " pass2; echo ""
+    
+    if [[ "$pass1" != "$pass2" ]]; then
+        echo -e "${RED}Passwords do not match!${NC}"
+        return
+    fi
+    
+    if [[ ${#pass1} -lt 8 ]]; then
+        echo -e "${RED}Password must be at least 8 characters!${NC}"
+        return
+    fi
+    
+    sed -i "s/PANEL_PASSWORD=.*/PANEL_PASSWORD=$pass1/" $INSTALL_DIR/config/.env
+    systemctl restart haji-panel
+    echo -e "${GREEN}Password changed successfully ✅${NC}"
+}
+
+# ─── Domain Management ─────────────────────────────────────
+
+domain_menu() {
+    echo "  1. Add Panel Domain"
+    echo "  2. Add Config Domain"
+    echo "  3. Add Sub-link Domain"
+    echo "  4. Remove Domain"
+    echo "  5. List Domains"
+    read -p "  Select: " choice
+    case $choice in
+        1) read -p "Domain (e.g. admin.example.com): " dom; add_domain_nginx "$dom" "panel" 5000 ;;
+        2) read -p "Domain (e.g. cfg.example.com): " dom; add_domain_nginx "$dom" "config" 5000 ;;
+        3) read -p "Domain (e.g. sub.example.com): " dom; add_domain_nginx "$dom" "sub_link" 5000 ;;
+        4) read -p "Domain to remove: " dom; remove_domain_nginx "$dom" ;;
+        5) list_domains ;;
+    esac
+}
+
+add_domain_nginx() {
+    local domain=$1
+    local dtype=$2
+    local port=${3:-5000}
+    
+    if [[ -z "$domain" ]]; then
+        echo -e "${RED}Domain is required${NC}"
+        return
+    fi
+    
+    # Create Nginx config
+    cat > "/etc/nginx/sites-available/$domain" << NGINXEOF
+server {
+    listen 80;
+    server_name $domain;
+    server_tokens off;
+    
+    location / {
+        proxy_pass http://127.0.0.1:$port;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+    
+    location /panel/ {
+        proxy_pass http://127.0.0.1:$port;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+    }
+    
+    location /sub/ {
+        proxy_pass http://127.0.0.1:$port;
+        proxy_set_header Host \$host;
+    }
+    
+    location /bot/webhook {
+        proxy_pass http://127.0.0.1:$port;
+        proxy_set_header Host \$host;
+    }
+    
+    proxy_hide_header X-Powered-By;
+    proxy_hide_header Server;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    client_max_body_size 50M;
+}
+NGINXEOF
+    
+    ln -sf "/etc/nginx/sites-available/$domain" "/etc/nginx/sites-enabled/$domain"
+    nginx -t && systemctl reload nginx
+    
+    # Save to config
+    cd $INSTALL_DIR && python3 -c "
+import json
+cfg = json.load(open('config/domain.json')) if __import__('os').path.exists('config/domain.json') else {}
+if 'domains' not in cfg: cfg['domains'] = []
+cfg['domains'] = [d for d in cfg['domains'] if d.get('name') != '$domain']
+cfg['domains'].append({'name': '$domain', 'type': '$dtype', 'port': $port})
+cfg['${dtype}_domain'] = '$domain'
+json.dump(cfg, open('config/domain.json','w'), indent=2, ensure_ascii=False)
+"
+    
+    echo -e "${GREEN}Domain $domain added + Nginx configured ✅${NC}"
+}
+
+remove_domain_nginx() {
+    local domain=$1
+    rm -f "/etc/nginx/sites-enabled/$domain"
+    rm -f "/etc/nginx/sites-available/$domain"
+    nginx -t && systemctl reload nginx
+    
+    cd $INSTALL_DIR && python3 -c "
+import json, os
+p = 'config/domain.json'
+if os.path.exists(p):
+    cfg = json.load(open(p))
+    cfg['domains'] = [d for d in cfg.get('domains',[]) if d.get('name') != '$domain']
+    for k in ['sub_link_domain','config_domain','panel_domain']:
+        if cfg.get(k) == '$domain': cfg.pop(k, None)
+    json.dump(cfg, open(p,'w'), indent=2, ensure_ascii=False)
+"
+    echo -e "${GREEN}Domain $domain removed ✅${NC}"
+}
+
+list_domains() {
+    cd $INSTALL_DIR && python3 -c "
+import json, os
+p = 'config/domain.json'
+if os.path.exists(p):
+    cfg = json.load(open(p))
+    print('Configured domains:')
+    for d in cfg.get('domains', []):
+        print(f'  {d[\"name\"]} ({d[\"type\"]}) -> port {d[\"port\"]}')
+    print(f'Sub-link domain: {cfg.get(\"sub_link_domain\", \"not set\")}')
+    print(f'Config domain: {cfg.get(\"config_domain\", \"not set\")}')
+    print(f'Panel domain: {cfg.get(\"panel_domain\", \"not set\")}')
+else:
+    print('No domains configured')
+"
+}
+
+# ─── Sub-link Domain ───────────────────────────────────────
+
+sub_domain_menu() {
+    echo "  1. Set Sub-link Domain"
+    echo "  2. Remove Sub-link Domain"
+    echo "  3. Show Current"
+    read -p "  Select: " choice
+    case $choice in
+        1) read -p "Sub-link domain (e.g. sub.example.com): " dom; add_domain_nginx "$dom" "sub_link" 5000 ;;
+        2) read -p "Domain to remove: " dom; remove_domain_nginx "$dom" ;;
+        3) list_domains ;;
+    esac
+}
+
+# ─── Security Settings ─────────────────────────────────────
+
+security_menu() {
+    echo "  1. Show Security Status"
+    echo "  2. Set Max Login Attempts"
+    echo "  3. Set Lockout Duration (minutes)"
+    echo "  4. Set Session Timeout (minutes)"
+    echo "  5. Enable IP Whitelist"
+    echo "  6. Disable IP Whitelist"
+    echo "  7. Add IP to Whitelist"
+    echo "  8. Remove IP from Whitelist"
+    echo "  9. View Login Logs"
+    echo "  10. Enable 2FA"
+    echo "  11. Disable 2FA"
+    read -p "  Select: " choice
+    case $choice in
+        1) cd $INSTALL_DIR && python3 -c "from core.security import SecurityManager; import json; print(json.dumps(SecurityManager().get_status(), indent=2))" ;;
+        2) read -p "Max attempts: " val; cd $INSTALL_DIR && python3 -c "from core.security import SecurityManager; SecurityManager().update_settings({'max_login_attempts': $val}); print('Done')" ;;
+        3) read -p "Minutes: " val; cd $INSTALL_DIR && python3 -c "from core.security import SecurityManager; SecurityManager().update_settings({'lockout_duration_minutes': $val}); print('Done')" ;;
+        4) read -p "Minutes: " val; cd $INSTALL_DIR && python3 -c "from core.security import SecurityManager; SecurityManager().update_settings({'session_timeout_minutes': $val}); print('Done')" ;;
+        5) cd $INSTALL_DIR && python3 -c "from core.security import SecurityManager; SecurityManager().update_settings({'ip_whitelist_enabled': True}); print('Enabled')" ;;
+        6) cd $INSTALL_DIR && python3 -c "from core.security import SecurityManager; SecurityManager().update_settings({'ip_whitelist_enabled': False}); print('Disabled')" ;;
+        7) read -p "IP: " ip; cd $INSTALL_DIR && python3 -c "from core.security import SecurityManager; SecurityManager().add_to_whitelist('$ip'); print('Added')" ;;
+        8) read -p "IP: " ip; cd $INSTALL_DIR && python3 -c "from core.security import SecurityManager; SecurityManager().remove_from_whitelist('$ip'); print('Removed')" ;;
+        9) cd $INSTALL_DIR && python3 -c "from core.security import SecurityManager; [print(f'{a[\"ip\"]} - {a[\"status\"]} - {a[\"timestamp\"]}') for a in SecurityManager().get_login_log(20)]" ;;
+        10) cd $INSTALL_DIR && python3 -c "from core.security import SecurityManager; s=SecurityManager().generate_2fa_secret(); print(f'2FA enabled. Secret: {s}')" ;;
+        11) cd $INSTALL_DIR && python3 -c "from core.security import SecurityManager; SecurityManager().disable_2fa(); print('Disabled')" ;;
+    esac
+}
+
 # ─── Main ──────────────────────────────────────────────────
 
 case "$1" in
@@ -240,6 +433,10 @@ case "$1" in
     firewall)     firewall_menu ;;
     bbr)          bbr_menu ;;
     speedtest)    speedtest ;;
+    password)     change_password ;;
+    domain)       domain_menu ;;
+    sub-domain)   sub_domain_menu ;;
+    security)     security_menu ;;
     ""|"menu")    show_menu ;;
     *)            show_usage ;;
 esac

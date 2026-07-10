@@ -12,6 +12,22 @@
             --bg-glass: rgba(18, 18, 42, 0.7);
             --text: #e4e6eb;
             --text-dim: #8b8fa3;
+            --accent: {{ branding.primary_color | default('#00d4ff') }};
+            --accent2: {{ branding.secondary_color | default('#7b2ff7') }};
+            --success: #00e676;
+            --warning: #ffab00;
+            --danger: #ff3d71;
+            --border: rgba(255,255,255,0.08);
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a1a;
+            --bg-card: #12122a;
+            --bg-glass: rgba(18, 18, 42, 0.7);
+            --text: #e4e6eb;
+            --text-dim: #8b8fa3;
             --accent: #00d4ff;
             --accent2: #7b2ff7;
             --success: #00e676;
@@ -564,7 +580,9 @@
 
     <script>
     const SUBDOMAIN = '{{ subdomain }}';
-    const CIRCUMFERENCE = 326.7; // 2 * PI * 52
+    const ACCESS_KEY = '{{ access_key }}';
+    const CIRCUMFERENCE = 326.7;
+    const API_BASE = ACCESS_KEY ? '/api/k/' + ACCESS_KEY : '/api/traffic/' + encodeURIComponent(SUBDOMAIN); // 2 * PI * 52
 
     function formatBytes(bytes) {
         if (bytes === 0) return '0 B';
@@ -599,7 +617,7 @@
 
     async function loadData() {
         try {
-            const res = await fetch('/api/traffic/' + encodeURIComponent(SUBDOMAIN));
+            const res = await fetch(API_BASE + '/status');
             const data = await res.json();
             if (!data.ok) return;
             const s = data.status;
@@ -714,7 +732,7 @@
         const dataLimit = document.getElementById('limitData').value;
         const timeLimit = document.getElementById('limitTime').value;
 
-        const res = await fetch('/api/traffic/' + encodeURIComponent(SUBDOMAIN) + '/limits', {
+        const res = await fetch(API_BASE + '/limits', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({data_limit_gb: parseFloat(dataLimit), time_limit_hours: parseFloat(timeLimit)})
@@ -731,7 +749,7 @@
 
     async function resetUsage() {
         if (!confirm('آیا از ریست مصرف مطمئن هستید؟')) return;
-        const res = await fetch('/api/traffic/' + encodeURIComponent(SUBDOMAIN) + '/reset', {
+        const res = await fetch(API_BASE + '/reset', {
             method: 'POST'
         });
         const data = await res.json();
@@ -754,7 +772,7 @@
 
     async function loadCleanIpStatus() {
         try {
-            const res = await fetch('/api/scanner/check/' + encodeURIComponent(SUBDOMAIN));
+            const res = await fetch(API_BASE + '/check');
             const data = await res.json();
             if (!data.ok) return;
             const check = data.check;
@@ -781,7 +799,7 @@
     }
 
     async function switchIp() {
-        const res = await fetch('/api/scanner/switch/' + encodeURIComponent(SUBDOMAIN), {method: 'POST'});
+        const res = await fetch(API_BASE + '/switch', {method: 'POST'});
         const data = await res.json();
         if (data.ok) {
             alert('IP تعویض شد ✅\n' + data.message);
@@ -794,7 +812,7 @@
 
     async function loadConfigs() {
         try {
-            const res = await fetch('/api/traffic/' + encodeURIComponent(SUBDOMAIN) + '/configs');
+            const res = await fetch(API_BASE + '/configs');
             const data = await res.json();
             if (!data.ok) return;
 

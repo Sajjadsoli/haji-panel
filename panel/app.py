@@ -8,17 +8,29 @@ import os
 import json
 import subprocess
 import psutil
+import time
+import secrets
 from datetime import datetime
-from flask import Flask, render_template, jsonify, request, redirect, session
+from flask import Flask, render_template, jsonify, request, redirect, session, abort
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "haji-panel-secret-change-me")
+app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 
 CONFIG_DIR = "/opt/haji-panel/config"
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 DOMAIN_FILE = os.path.join(CONFIG_DIR, "domain.json")
 BRANDING_FILE = os.path.join(CONFIG_DIR, "branding.json")
+SECURITY_FILE = os.path.join(CONFIG_DIR, "security.json")
 PANEL_PASSWORD = os.environ.get("PANEL_PASSWORD", "admin")
+
+# Public endpoints that don't require auth
+PUBLIC_ENDPOINTS = {
+    "login", "static", "bot_webhook", "sub_subscription",
+    "subdomain_panel_by_key", "api_traffic_status_by_key",
+    "api_traffic_configs_by_key", "api_scanner_check_by_key",
+    "api_scanner_switch_by_key", "api_traffic_limits_by_key",
+    "api_traffic_reset_by_key"
+}
 
 # ─── Branding ───────────────────────────────────────────────
 
@@ -53,15 +65,38 @@ def save_branding(cfg):
 # ─── Auth ───────────────────────────────────────────────────
 
 def check_auth():
+    from core.security import SecurityManager
+    sm = SecurityManager()
+    if not sm.is_session_valid(dict(session)):
+        session.clear()
+        return False
     return session.get("authenticated", False)
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    from core.security import SecurityManager
+    sm = SecurityManager()
+    client_ip = request.environ.get("HTTP_X_FORWARDED_FOR", request.remote_addr or "").split(",")[0].strip()
+    
+    # Check IP whitelist
+    if not sm.check_ip_whitelist(client_ip):
+        return render_template("login.html", error="دسترسی از این IP مجاز نیست"), 403
+    
     if request.method == "POST":
+        # Rate limit check
+        allowed, msg = sm.check_rate_limit(client_ip)
+        if not allowed:
+            return render_template("login.html", error=msg), 429
+        
         password = request.form.get("password", "")
         if password == PANEL_PASSWORD:
+            sm.record_successful_login(client_ip)
             session["authenticated"] = True
+            session["login_time"] = time.time()
+            session["ip"] = client_ip
+            session.permanent = True
             return redirect("/")
+        sm.record_failed_login(client_ip)
         return render_template("login.html", error="رمز عبور اشتباه است")
     return render_template("login.html", error=None)
 
@@ -74,11 +109,25 @@ def logout():
 
 @app.before_request
 def require_auth():
-    if request.endpoint in ("login", "static"):
+    if request.endpoint in PUBLIC_ENDPOINTS:
         return None
     if not check_auth():
         return redirect("/login")
     return None
+
+@app.after_request
+def security_headers(response):
+    from core.security import SecurityManager
+    sm = SecurityManager()
+    cfg = sm._load()
+    if cfg.get("hide_server_info", True):
+        response.headers["Server"] = "Haji"
+        response.headers.pop("X-Powered-By", None)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
 
 # ─── Helpers ────────────────────────────────────────────────
 
@@ -433,12 +482,167 @@ def api_bot_broadcast():
 
 @app.route("/bot/webhook", methods=["POST"])
 def bot_webhook():
-    """وب‌هوک تلگرام"""
+    """وب‌هوک تلگرام - عمومی"""
     from core.telegram_bot import HajiTelegramBot
     bot = HajiTelegramBot()
     update = request.json or {}
     result = bot.handle_update(update)
     return jsonify(result)
+
+# ─── Domain Management API ─────────────────────────────────
+
+@app.route("/api/domain/add", methods=["POST"])
+def api_domain_add():
+    """افزودن دامنه + کانفیگ خودکار Nginx"""
+    data = request.json or {}
+    domain = data.get("domain", "").strip()
+    domain_type = data.get("type", "panel")  # panel, config, sub_link
+    target_port = data.get("port", 5000)
+    
+    if not domain:
+        return jsonify({"ok": False, "error": "دامنه الزامی است"})
+    
+    # Nginx config
+    nginx_conf = f"""server {{
+    listen 80;
+    server_name {domain};
+    
+    # Hide server identity
+    server_tokens off;
+    
+    location / {{
+        proxy_pass http://127.0.0.1:{target_port};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }}
+    
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    
+    # Anti-detection
+    proxy_hide_header X-Powered-By;
+    proxy_hide_header Server;
+    
+    client_max_body_size 50M;
+}}"""
+    
+    conf_path = f"/etc/nginx/sites-available/{domain}"
+    with open(conf_path, "w") as f:
+        f.write(nginx_conf)
+    
+    enabled_path = f"/etc/nginx/sites-enabled/{domain}"
+    if os.path.islink(enabled_path) or os.path.exists(enabled_path):
+        os.remove(enabled_path)
+    os.symlink(conf_path, enabled_path)
+    
+    ok, msg = run_cmd("nginx -t && systemctl reload nginx")
+    
+    if ok:
+        # Save to domain config
+        cfg = load_domain_config()
+        if "domains" not in cfg:
+            cfg["domains"] = []
+        cfg["domains"] = [d for d in cfg["domains"] if d.get("name") != domain]
+        cfg["domains"].append({"name": domain, "type": domain_type, "port": target_port})
+        
+        if domain_type == "sub_link":
+            cfg["sub_link_domain"] = domain
+        elif domain_type == "config":
+            cfg["config_domain"] = domain
+        elif domain_type == "panel":
+            cfg["panel_domain"] = domain
+        
+        save_domain_config(cfg)
+    
+    return jsonify({"ok": ok, "message": f"دامنه {domain} اضافه شد و Nginx کانفیگ شد"})
+
+@app.route("/api/domain/remove", methods=["POST"])
+def api_domain_remove():
+    """حذف دامنه + حذف کانفیگ Nginx"""
+    data = request.json or {}
+    domain = data.get("domain", "").strip()
+    
+    if not domain:
+        return jsonify({"ok": False, "error": "دامنه الزامی است"})
+    
+    enabled_path = f"/etc/nginx/sites-enabled/{domain}"
+    available_path = f"/etc/nginx/sites-available/{domain}"
+    
+    if os.path.islink(enabled_path) or os.path.exists(enabled_path):
+        os.remove(enabled_path)
+    if os.path.exists(available_path):
+        os.remove(available_path)
+    
+    ok, msg = run_cmd("nginx -t && systemctl reload nginx")
+    
+    if ok:
+        cfg = load_domain_config()
+        if "domains" in cfg:
+            cfg["domains"] = [d for d in cfg["domains"] if d.get("name") != domain]
+        if cfg.get("sub_link_domain") == domain:
+            cfg.pop("sub_link_domain", None)
+        if cfg.get("config_domain") == domain:
+            cfg.pop("config_domain", None)
+        if cfg.get("panel_domain") == domain:
+            cfg.pop("panel_domain", None)
+        save_domain_config(cfg)
+    
+    return jsonify({"ok": ok, "message": f"دامنه {domain} حذف شد"})
+
+@app.route("/api/domain/list")
+def api_domain_list():
+    """لیست دامنه‌های کانفیگ شده"""
+    cfg = load_domain_config()
+    return jsonify({"ok": True, "domains": cfg.get("domains", []), 
+                     "sub_link_domain": cfg.get("sub_link_domain", ""),
+                     "config_domain": cfg.get("config_domain", ""),
+                     "panel_domain": cfg.get("panel_domain", "")})
+
+# ─── Security API ──────────────────────────────────────────
+
+@app.route("/api/security/status")
+def api_security_status():
+    from core.security import SecurityManager
+    sm = SecurityManager()
+    return jsonify({"ok": True, "status": sm.get_status()})
+
+@app.route("/api/security/settings", methods=["POST"])
+def api_security_settings():
+    from core.security import SecurityManager
+    sm = SecurityManager()
+    data = request.json or {}
+    sm.update_settings(data)
+    return jsonify({"ok": True, "message": "تنظیمات امنیتی ذخیره شد"})
+
+@app.route("/api/security/logs")
+def api_security_logs():
+    from core.security import SecurityManager
+    sm = SecurityManager()
+    limit = request.args.get("limit", "50")
+    logs = sm.get_login_log(int(limit))
+    return jsonify({"ok": True, "logs": logs})
+
+@app.route("/api/security/whitelist", methods=["POST"])
+def api_security_whitelist():
+    from core.security import SecurityManager
+    sm = SecurityManager()
+    data = request.json or {}
+    action = data.get("action", "")
+    ip = data.get("ip", "")
+    if action == "add":
+        sm.add_to_whitelist(ip)
+        return jsonify({"ok": True, "message": f"IP {ip} اضافه شد"})
+    elif action == "remove":
+        sm.remove_from_whitelist(ip)
+        return jsonify({"ok": True, "message": f"IP {ip} حذف شد"})
+    return jsonify({"ok": False, "error": "action نامعتبر"})
 
 # ─── Subdomain Panel (Graphical) ─────────────────────────
 
@@ -456,10 +660,85 @@ def api_traffic_status(subdomain):
     tm = TrafficMonitor()
     status = tm.get_status(subdomain)
     if status is None:
-        # Auto-init with defaults
         tm.init_subdomain(subdomain)
         status = tm.get_status(subdomain)
     return jsonify({"ok": True, "status": status})
+
+# Public API by access key (no auth required)
+@app.route("/api/k/<access_key>/status")
+def api_traffic_status_by_key(access_key):
+    subdomain = _get_subdomain_by_key(access_key)
+    if not subdomain:
+        return jsonify({"ok": False, "error": "کلید نامعتبر"}), 404
+    from core.traffic_monitor import TrafficMonitor
+    tm = TrafficMonitor()
+    status = tm.get_status(subdomain)
+    if status is None:
+        return jsonify({"ok": False, "error": "ساب‌دامنه یافت نشد"})
+    return jsonify({"ok": True, "status": status})
+
+@app.route("/api/k/<access_key>/configs")
+def api_traffic_configs_by_key(access_key):
+    subdomain = _get_subdomain_by_key(access_key)
+    if not subdomain:
+        return jsonify({"ok": False, "error": "کلید نامعتبر"}), 404
+    from core.traffic_monitor import TrafficMonitor
+    tm = TrafficMonitor()
+    branding = load_branding()
+    configs = tm.get_configs(subdomain, config_prefix=branding.get("config_prefix", "Haji"))
+    
+    # Inject clean IP if available
+    from core.ip_scanner import IPScanner
+    scanner = IPScanner()
+    current_ip = scanner.get_status().get("current_ips", {}).get(subdomain)
+    if current_ip:
+        for c in configs:
+            if c["type"] != "sub":
+                c["link"] = c["link"].replace(f"@{subdomain}:", f"@{current_ip['ip']}:").replace(f"@{subdomain}/", f"@{current_ip['ip']}/")
+                c["desc"] += f" • 💎 IP: {current_ip['ip']}"
+    
+    return jsonify({"ok": True, "configs": configs})
+
+@app.route("/api/k/<access_key>/check")
+def api_scanner_check_by_key(access_key):
+    subdomain = _get_subdomain_by_key(access_key)
+    if not subdomain:
+        return jsonify({"ok": False}), 404
+    from core.ip_scanner import IPScanner
+    scanner = IPScanner()
+    result = scanner.check_current_ip(subdomain)
+    return jsonify({"ok": True, "check": result})
+
+@app.route("/api/k/<access_key>/switch", methods=["POST"])
+def api_scanner_switch_by_key(access_key):
+    subdomain = _get_subdomain_by_key(access_key)
+    if not subdomain:
+        return jsonify({"ok": False}), 404
+    from core.ip_scanner import IPScanner
+    scanner = IPScanner()
+    ok, msg = scanner.auto_switch_if_filtered(subdomain)
+    return jsonify({"ok": ok, "message": msg})
+
+@app.route("/api/k/<access_key>/limits", methods=["POST"])
+def api_traffic_limits_by_key(access_key):
+    subdomain = _get_subdomain_by_key(access_key)
+    if not subdomain:
+        return jsonify({"ok": False}), 404
+    from core.traffic_monitor import TrafficMonitor
+    tm = TrafficMonitor()
+    data = request.json or {}
+    ok = tm.update_limits(subdomain, data.get("data_limit_gb"), data.get("time_limit_hours"))
+    return jsonify({"ok": ok})
+
+@app.route("/api/k/<access_key>/reset", methods=["POST"])
+def api_traffic_reset_by_key(access_key):
+    subdomain = _get_subdomain_by_key(access_key)
+    if not subdomain:
+        return jsonify({"ok": False}), 404
+    from core.traffic_monitor import TrafficMonitor
+    tm = TrafficMonitor()
+    ok = tm.reset_usage(subdomain)
+    return jsonify({"ok": ok})
 
 @app.route("/api/traffic/<path:subdomain>/limits", methods=["POST"])
 def api_traffic_limits(subdomain):
@@ -591,10 +870,16 @@ def api_subdomain():
         
         # Initialize traffic monitoring
         from core.traffic_monitor import TrafficMonitor
+        import secrets as _s
         tm = TrafficMonitor()
+        access_key = _s.token_hex(16)
         tm.init_subdomain(subdomain, port=port)
+        # Add access key
+        data = tm._load()
+        data["subdomains"][subdomain]["access_key"] = access_key
+        tm._save(data)
     
-    return jsonify({"ok": ok, "message": f"ساب‌دامنه {subdomain} اضافه شد"})
+    return jsonify({"ok": ok, "message": f"ساب‌دامنه {subdomain} اضافه شد", "access_key": access_key})
 
 @app.route("/api/subdomain/delete", methods=["POST"])
 def api_subdomain_delete():
