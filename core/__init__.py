@@ -1,0 +1,1 @@
+# Haji Panel - Core modules

@@ -13,6 +13,12 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 INSTALL_DIR="/opt/haji-panel"
+PYTHON="${INSTALL_DIR}/panel/venv/bin/python3"
+
+# Fallback to system python if venv not available
+if [[ ! -f "$PYTHON" ]]; then
+    PYTHON="python3"
+fi
 
 show_usage() {
     echo -e "${CYAN}"
@@ -130,7 +136,7 @@ show_settings() {
     echo -e "${CYAN}Current Settings:${NC}"
     cat $INSTALL_DIR/config/.env 2>/dev/null
     echo ""
-    cat $INSTALL_DIR/config/config.json 2>/dev/null | python3 -m json.tool 2>/dev/null
+    cat $INSTALL_DIR/config/config.json 2>/dev/null | $PYTHON -m json.tool 2>/dev/null
 }
 
 ssl_menu() {
@@ -168,10 +174,10 @@ scanner_menu() {
     echo "4. Disable Auto-Switch"
     read -p "Select: " choice
     case $choice in
-        1) cd $INSTALL_DIR && python3 -c "from core.ip_scanner import IPScanner; s=IPScanner(); print(s.scan())" ;;
-        2) cd $INSTALL_DIR && python3 -c "from core.ip_scanner import IPScanner; s=IPScanner(); print(s.get_status())" ;;
-        3) cd $INSTALL_DIR && python3 -c "from core.ip_scanner import IPScanner; s=IPScanner(); s.update_settings({'auto_switch':True}); print('Enabled')" ;;
-        4) cd $INSTALL_DIR && python3 -c "from core.ip_scanner import IPScanner; s=IPScanner(); s.update_settings({'auto_switch':False}); print('Disabled')" ;;
+        1) cd $INSTALL_DIR && $PYTHON -c "from core.ip_scanner import IPScanner; s=IPScanner(); print(s.scan())" ;;
+        2) cd $INSTALL_DIR && $PYTHON -c "from core.ip_scanner import IPScanner; s=IPScanner(); print(s.get_status())" ;;
+        3) cd $INSTALL_DIR && $PYTHON -c "from core.ip_scanner import IPScanner; s=IPScanner(); s.update_settings({'auto_switch':True}); print('Enabled')" ;;
+        4) cd $INSTALL_DIR && $PYTHON -c "from core.ip_scanner import IPScanner; s=IPScanner(); s.update_settings({'auto_switch':False}); print('Disabled')" ;;
     esac
 }
 
@@ -185,13 +191,13 @@ bot_menu() {
     echo "7. Broadcast Message"
     read -p "Select: " choice
     case $choice in
-        1) read -p "Bot Token: " token; read -p "Owner ID: " owner; read -p "Domain: " domain; cd $INSTALL_DIR && python3 -c "from core.telegram_bot import HajiTelegramBot; b=HajiTelegramBot(); print(b.setup('$token','$owner','$domain'))" ;;
-        2) cd $INSTALL_DIR && python3 -c "from core.telegram_bot import HajiTelegramBot; b=HajiTelegramBot(); import json; print(json.dumps(b.get_status(),indent=2))" ;;
-        3) read -p "Domain: " domain; cd $INSTALL_DIR && python3 -c "from core.telegram_bot import HajiTelegramBot; b=HajiTelegramBot(); print(b.set_webhook('$domain'))" ;;
-        4) cd $INSTALL_DIR && python3 -c "from core.telegram_bot import HajiTelegramBot; b=HajiTelegramBot(); print(b.delete_webhook())" ;;
-        5) read -p "Admin ID: " aid; read -p "Name: " name; cd $INSTALL_DIR && python3 -c "from core.telegram_bot import HajiTelegramBot; b=HajiTelegramBot(); print(b.add_admin('$aid','$name'))" ;;
-        6) read -p "Admin ID: " aid; cd $INSTALL_DIR && python3 -c "from core.telegram_bot import HajiTelegramBot; b=HajiTelegramBot(); print(b.remove_admin('$aid'))" ;;
-        7) read -p "Message: " msg; cd $INSTALL_DIR && python3 -c "from core.telegram_bot import HajiTelegramBot; b=HajiTelegramBot(); print(f'Sent to {b.broadcast(\"$msg\")} users')" ;;
+        1) read -p "Bot Token: " token; read -p "Owner ID: " owner; read -p "Domain: " domain; cd $INSTALL_DIR && $PYTHON -c "from core.telegram_bot import HajiTelegramBot; b=HajiTelegramBot(); print(b.setup('$token','$owner','$domain'))" ;;
+        2) cd $INSTALL_DIR && $PYTHON -c "from core.telegram_bot import HajiTelegramBot; b=HajiTelegramBot(); import json; print(json.dumps(b.get_status(),indent=2))" ;;
+        3) read -p "Domain: " domain; cd $INSTALL_DIR && $PYTHON -c "from core.telegram_bot import HajiTelegramBot; b=HajiTelegramBot(); print(b.set_webhook('$domain'))" ;;
+        4) cd $INSTALL_DIR && $PYTHON -c "from core.telegram_bot import HajiTelegramBot; b=HajiTelegramBot(); print(b.delete_webhook())" ;;
+        5) read -p "Admin ID: " aid; read -p "Name: " name; cd $INSTALL_DIR && $PYTHON -c "from core.telegram_bot import HajiTelegramBot; b=HajiTelegramBot(); print(b.add_admin('$aid','$name'))" ;;
+        6) read -p "Admin ID: " aid; cd $INSTALL_DIR && $PYTHON -c "from core.telegram_bot import HajiTelegramBot; b=HajiTelegramBot(); print(b.remove_admin('$aid'))" ;;
+        7) read -p "Message: " msg; cd $INSTALL_DIR && $PYTHON -c "from core.telegram_bot import HajiTelegramBot; b=HajiTelegramBot(); print(f'Sent to {b.broadcast(\"$msg\")} users')" ;;
     esac
 }
 
@@ -317,7 +323,7 @@ NGINXEOF
     nginx -t && systemctl reload nginx
     
     # Save to config
-    cd $INSTALL_DIR && python3 -c "
+    cd $INSTALL_DIR && $PYTHON -c "
 import json
 cfg = json.load(open('config/domain.json')) if __import__('os').path.exists('config/domain.json') else {}
 if 'domains' not in cfg: cfg['domains'] = []
@@ -339,7 +345,7 @@ json.dump(cfg, open('config/domain.json','w'), indent=2, ensure_ascii=False)
         if [[ $? -eq 0 ]]; then
             echo -e "${GREEN}SSL activated for $domain ✅${NC}"
             # Update config
-            cd $INSTALL_DIR && python3 -c "
+            cd $INSTALL_DIR && $PYTHON -c "
 import json, os
 p = 'config/domain.json'
 if os.path.exists(p):
@@ -361,7 +367,7 @@ remove_domain_nginx() {
     rm -f "/etc/nginx/sites-available/$domain"
     nginx -t && systemctl reload nginx
     
-    cd $INSTALL_DIR && python3 -c "
+    cd $INSTALL_DIR && $PYTHON -c "
 import json, os
 p = 'config/domain.json'
 if os.path.exists(p):
@@ -375,7 +381,7 @@ if os.path.exists(p):
 }
 
 list_domains() {
-    cd $INSTALL_DIR && python3 -c "
+    cd $INSTALL_DIR && $PYTHON -c "
 import json, os
 p = 'config/domain.json'
 if os.path.exists(p):
@@ -421,17 +427,17 @@ security_menu() {
     echo "  11. Disable 2FA"
     read -p "  Select: " choice
     case $choice in
-        1) cd $INSTALL_DIR && python3 -c "from core.security import SecurityManager; import json; print(json.dumps(SecurityManager().get_status(), indent=2))" ;;
-        2) read -p "Max attempts: " val; cd $INSTALL_DIR && python3 -c "from core.security import SecurityManager; SecurityManager().update_settings({'max_login_attempts': $val}); print('Done')" ;;
-        3) read -p "Minutes: " val; cd $INSTALL_DIR && python3 -c "from core.security import SecurityManager; SecurityManager().update_settings({'lockout_duration_minutes': $val}); print('Done')" ;;
-        4) read -p "Minutes: " val; cd $INSTALL_DIR && python3 -c "from core.security import SecurityManager; SecurityManager().update_settings({'session_timeout_minutes': $val}); print('Done')" ;;
-        5) cd $INSTALL_DIR && python3 -c "from core.security import SecurityManager; SecurityManager().update_settings({'ip_whitelist_enabled': True}); print('Enabled')" ;;
-        6) cd $INSTALL_DIR && python3 -c "from core.security import SecurityManager; SecurityManager().update_settings({'ip_whitelist_enabled': False}); print('Disabled')" ;;
-        7) read -p "IP: " ip; cd $INSTALL_DIR && python3 -c "from core.security import SecurityManager; SecurityManager().add_to_whitelist('$ip'); print('Added')" ;;
-        8) read -p "IP: " ip; cd $INSTALL_DIR && python3 -c "from core.security import SecurityManager; SecurityManager().remove_from_whitelist('$ip'); print('Removed')" ;;
-        9) cd $INSTALL_DIR && python3 -c "from core.security import SecurityManager; [print(f'{a[\"ip\"]} - {a[\"status\"]} - {a[\"timestamp\"]}') for a in SecurityManager().get_login_log(20)]" ;;
-        10) cd $INSTALL_DIR && python3 -c "from core.security import SecurityManager; s=SecurityManager().generate_2fa_secret(); print(f'2FA enabled. Secret: {s}')" ;;
-        11) cd $INSTALL_DIR && python3 -c "from core.security import SecurityManager; SecurityManager().disable_2fa(); print('Disabled')" ;;
+        1) cd $INSTALL_DIR && $PYTHON -c "from core.security import SecurityManager; import json; print(json.dumps(SecurityManager().get_status(), indent=2))" ;;
+        2) read -p "Max attempts: " val; cd $INSTALL_DIR && $PYTHON -c "from core.security import SecurityManager; SecurityManager().update_settings({'max_login_attempts': $val}); print('Done')" ;;
+        3) read -p "Minutes: " val; cd $INSTALL_DIR && $PYTHON -c "from core.security import SecurityManager; SecurityManager().update_settings({'lockout_duration_minutes': $val}); print('Done')" ;;
+        4) read -p "Minutes: " val; cd $INSTALL_DIR && $PYTHON -c "from core.security import SecurityManager; SecurityManager().update_settings({'session_timeout_minutes': $val}); print('Done')" ;;
+        5) cd $INSTALL_DIR && $PYTHON -c "from core.security import SecurityManager; SecurityManager().update_settings({'ip_whitelist_enabled': True}); print('Enabled')" ;;
+        6) cd $INSTALL_DIR && $PYTHON -c "from core.security import SecurityManager; SecurityManager().update_settings({'ip_whitelist_enabled': False}); print('Disabled')" ;;
+        7) read -p "IP: " ip; cd $INSTALL_DIR && $PYTHON -c "from core.security import SecurityManager; SecurityManager().add_to_whitelist('$ip'); print('Added')" ;;
+        8) read -p "IP: " ip; cd $INSTALL_DIR && $PYTHON -c "from core.security import SecurityManager; SecurityManager().remove_from_whitelist('$ip'); print('Removed')" ;;
+        9) cd $INSTALL_DIR && $PYTHON -c "from core.security import SecurityManager; [print(f'{a[\"ip\"]} - {a[\"status\"]} - {a[\"timestamp\"]}') for a in SecurityManager().get_login_log(20)]" ;;
+        10) cd $INSTALL_DIR && $PYTHON -c "from core.security import SecurityManager; s=SecurityManager().generate_2fa_secret(); print(f'2FA enabled. Secret: {s}')" ;;
+        11) cd $INSTALL_DIR && $PYTHON -c "from core.security import SecurityManager; SecurityManager().disable_2fa(); print('Disabled')" ;;
     esac
 }
 

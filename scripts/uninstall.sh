@@ -46,7 +46,7 @@ systemctl reload nginx 2>/dev/null || true
 log_info "بازگردانی DNS..."
 rm -f /etc/systemd/resolved.conf.d/doh.conf
 systemctl restart systemd-resolved 2>/dev/null || true
-[[ -f /etc/resolv.conf.haji-backup ]] && cp /etc/resolv.conf.haji-backup /etc/resolv.conf
+[[ -f /etc/resolv.conf.backup ]] && cp /etc/resolv.conf.backup /etc/resolv.conf
 
 # Remove files
 log_info "حذف فایل‌ها..."

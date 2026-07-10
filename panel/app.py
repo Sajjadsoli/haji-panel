@@ -5,6 +5,7 @@ Haji Panel - Panel Backend (Flask)
 """
 
 import os
+import sys
 import json
 import subprocess
 import psutil
@@ -12,6 +13,11 @@ import time
 import secrets
 from datetime import datetime
 from flask import Flask, render_template, jsonify, request, redirect, session, abort
+
+# Fix Python path so 'from core.xxx import' works when running from panel/ directory
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
@@ -26,7 +32,7 @@ PANEL_PASSWORD = os.environ.get("PANEL_PASSWORD", "admin")
 # Public endpoints that don't require auth
 PUBLIC_ENDPOINTS = {
     "login", "static", "bot_webhook", "sub_subscription",
-    "subdomain_panel_by_key", "api_traffic_status_by_key",
+    "subdomain_panel_page", "api_traffic_status_by_key",
     "api_traffic_configs_by_key", "api_scanner_check_by_key",
     "api_scanner_switch_by_key", "api_traffic_limits_by_key",
     "api_traffic_reset_by_key", "reseller_panel"
@@ -153,6 +159,14 @@ def save_domain_config(cfg):
 def run_cmd(cmd):
     try:
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+        return result.returncode == 0, result.stdout.strip() or result.stderr.strip()
+    except Exception as e:
+        return False, str(e)
+
+def run_cmd_safe(args_list):
+    """Run command without shell=True for safer argument handling."""
+    try:
+        result = subprocess.run(args_list, capture_output=True, text=True, timeout=30)
         return result.returncode == 0, result.stdout.strip() or result.stderr.strip()
     except Exception as e:
         return False, str(e)

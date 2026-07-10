@@ -77,9 +77,9 @@ install_deps() {
     
     log_info "نصب بسته‌های ضروری..."
     DEPS=(
-        python3 python3-pip python3-venv
+        python3 python3-pip python3-venv python3-dev
         nginx certbot python3-certbot-nginx
-        ufw curl wget git
+        ufw curl wget git unzip lsb-release
         dnsutils resolvconf
         net-tools htop
     )
@@ -100,6 +100,14 @@ install_xray() {
     log_info "نسخه Xray: $XRAY_VER"
     
     ARCH=$(arch)
+    # Map arch to Xray filename format
+    case "$ARCH" in
+        x86_64|amd64)  ARCH="64" ;;
+        aarch64|arm64) ARCH="arm64-v8a" ;;
+        armv7l|armhf)  ARCH="arm32-v7a" ;;
+        i386|i686)     ARCH="32" ;;
+        *)             ARCH="64" ;;  # default to 64-bit
+    esac
     XRAY_FILE="xray-linux-${ARCH}.zip"
     XRAY_URL="https://github.com/XTLS/Xray-core/releases/download/${XRAY_VER}/${XRAY_FILE}"
     
@@ -254,15 +262,18 @@ configure_nginx() {
     # Remove default site
     rm -f /etc/nginx/sites-enabled/default
     
-    # Create Haji Panel config
-    cat > /etc/nginx/sites-available/haji-panel << 'NGINXEOF'
-# Haji Panel - Nginx Configuration
+    # Create Haji Panel config (using the repo's nginx/default.conf if available)
+    if [[ -f "$INSTALL_DIR/nginx/default.conf" ]]; then
+        cp "$INSTALL_DIR/nginx/default.conf" /etc/nginx/sites-available/haji-panel
+    else
+        # Fallback inline config
+        cat > /etc/nginx/sites-available/haji-panel << 'NGINXEOF'
+# Haji Panel - Nginx Configuration (fallback)
 server {
     listen 80;
     listen [::]:80;
     server_name _;
     
-    # Panel
     location / {
         proxy_pass http://127.0.0.1:5000;
         proxy_set_header Host $host;
@@ -274,7 +285,6 @@ server {
         proxy_set_header Connection "upgrade";
     }
     
-    # API endpoints
     location /api/ {
         proxy_pass http://127.0.0.1:5000;
         proxy_set_header Host $host;
@@ -283,19 +293,71 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
     
-    # Security headers
+    location /bot/webhook {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+    
+    location /sub/ {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+    
+    location /panel/ {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    
+    location /static/ {
+        alias /opt/haji-panel/panel/static/;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+    
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-XSS-Protection "1; mode=block" always;
     
-    # Gzip
     gzip on;
     gzip_types text/css application/javascript application/json;
     
-    # Client max body size
+    client_max_body_size 50M;
+}
+
+# Panel on port 8443 (direct IP access)
+server {
+    listen 8443;
+    listen [::]:8443;
+    server_name _;
+    
+    location / {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+    
+    location /static/ {
+        alias /opt/haji-panel/panel/static/;
+        expires 30d;
+    }
+    
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    
     client_max_body_size 50M;
 }
 NGINXEOF
+    fi
     
     ln -sf /etc/nginx/sites-available/haji-panel /etc/nginx/sites-enabled/haji-panel
     
@@ -317,7 +379,7 @@ configure_firewall() {
     ufw allow 22/tcp    # SSH
     ufw allow 80/tcp    # HTTP
     ufw allow 443/tcp   # HTTPS
-    ufw allow 8443/tcp  # Panel
+    ufw allow 8443/tcp  # Panel (alternative)
     
     ufw --force enable
     log_ok "فایروال فعال شد (پورت‌های 22, 80, 443, 8443 باز)"
@@ -342,14 +404,15 @@ install_panel() {
     fi
     
     # Install CLI script
-    cp scripts/haji-cli.sh /usr/bin/haji
-    chmod +x /usr/bin/haji
+    cp "$INSTALL_DIR/scripts/haji-cli.sh" /usr/local/bin/haji
+    chmod +x /usr/local/bin/haji
     
     # Python venv
     cd "$INSTALL_DIR/panel"
     python3 -m venv venv
     source venv/bin/activate
-    pip install --quiet flask psutil requests
+    pip install --quiet --upgrade pip
+    pip install --quiet -r "$INSTALL_DIR/requirements.txt"
     deactivate
     
     # Create config
@@ -414,6 +477,7 @@ ExecStart=/opt/haji-panel/panel/venv/bin/python /opt/haji-panel/panel/app.py
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/opt/haji-panel
 EnvironmentFile=/opt/haji-panel/config/.env
 
 [Install]
@@ -435,8 +499,10 @@ setup_scanner_cron() {
 #!/bin/bash
 # Haji Panel - Auto IP Scanner Cron Job
 cd /opt/haji-panel
-source venv/bin/activate 2>/dev/null
+source panel/venv/bin/activate 2>/dev/null
 python3 -c "
+import sys, os
+sys.path.insert(0, '/opt/haji-panel')
 from core.ip_scanner import IPScanner
 scanner = IPScanner()
 settings = scanner.get_settings()
@@ -458,7 +524,7 @@ CRONEOF
     (crontab -l 2>/dev/null | grep -v "haji-panel/scripts/auto-scan.sh"; echo "$CRON_CMD") | crontab -
     
     # Add cron for reseller expiry check
-    CRON_RESELLER="0 */1 * * * cd /opt/haji-panel && python3 -c 'from core.reseller import ResellerManager; ResellerManager().check_expired()' >> /var/log/haji-reseller.log 2>&1"
+    CRON_RESELLER="0 */1 * * * cd /opt/haji-panel && panel/venv/bin/python3 -c 'import sys; sys.path.insert(0,\"/opt/haji-panel\"); from core.reseller import ResellerManager; ResellerManager().check_expired()' >> /var/log/haji-reseller.log 2>&1"
     (crontab -l 2>/dev/null | grep -v "haji-reseller"; echo "$CRON_RESELLER") | crontab -
     
     log_ok "اسکنر خودکار هر ۶ ساعت فعال شد"
